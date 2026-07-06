@@ -4,12 +4,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 10,
-      "includeFiles": [
-        "public/**",
-        "src/**",
-        "subjects/**",
-        "bo_400_cau_trac_nghiem_OS.md"
-      ]
+      "includeFiles": "{public/**,src/**,subjects/**,bo_400_cau_trac_nghiem_OS.md}"
     }
   },
   "rewrites": [
