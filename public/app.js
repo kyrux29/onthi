@@ -71,7 +71,13 @@ const els = {
   exampleSection: document.querySelector('#answer-example-section'),
   example: document.querySelector('#answer-example'),
   tips: document.querySelector('#answer-tips'),
+  analysisSection: document.querySelector('#option-analysis-section'),
+  analysisTitle: document.querySelector('#option-analysis-title'),
   analysis: document.querySelector('#option-analysis'),
+  questionJump: document.querySelector('#question-jump'),
+  jump: document.querySelector('#jump-btn'),
+  nextUnanswered: document.querySelector('#next-unanswered-btn'),
+  nextWrong: document.querySelector('#next-wrong-btn'),
   prev: document.querySelector('#prev-btn'),
   next: document.querySelector('#next-btn'),
   aiForm: document.querySelector('#ai-form'),
@@ -158,6 +164,18 @@ function bindEvents() {
   els.reset.addEventListener('click', resetProgress);
   els.prev.addEventListener('click', () => moveQuestion(-1));
   els.next.addEventListener('click', () => moveQuestion(1));
+  els.jump.addEventListener('click', jumpToQuestion);
+  els.questionJump.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      jumpToQuestion();
+    }
+  });
+  els.nextUnanswered.addEventListener('click', () => moveToNextMatch((question) => !state.progress.answers[question.id]));
+  els.nextWrong.addEventListener('click', () => moveToNextMatch((question) => {
+    const answer = state.progress.answers[question.id];
+    return answer && !answer.correct;
+  }));
   els.bookmark.addEventListener('click', toggleBookmark);
   els.documentInput.addEventListener('change', updateFileLabel);
   els.aiForm.addEventListener('submit', generateFromDocuments);
@@ -587,6 +605,13 @@ function renderList() {
     button.classList.toggle('wrong', Boolean(answer && !answer.correct));
     els.list.appendChild(button);
   }
+
+  requestAnimationFrame(() => {
+    els.list.querySelector('.question-chip.active')?.scrollIntoView({
+      block: 'nearest',
+      inline: 'center'
+    });
+  });
 }
 
 function renderQuestion() {
@@ -598,6 +623,8 @@ function renderQuestion() {
   if (!question) {
     els.questionChapter.textContent = 'Không có câu phù hợp';
     els.questionPosition.textContent = '0 / 0';
+    els.questionJump.value = '';
+    els.questionJump.max = '1';
     els.questionTitle.textContent = 'Không tìm thấy câu hỏi theo bộ lọc hiện tại.';
     els.answerPanel.hidden = true;
     els.bookmark.classList.remove('active');
@@ -607,6 +634,8 @@ function renderQuestion() {
   const saved = state.progress.answers[question.id];
   els.questionChapter.textContent = [question.subject, question.chapter, question.topic].filter(Boolean).join(' · ');
   els.questionPosition.textContent = `${state.currentIndex + 1} / ${state.filtered.length}`;
+  els.questionJump.max = String(state.filtered.length);
+  els.questionJump.value = String(state.currentIndex + 1);
   els.questionTitle.textContent = `${question.generated ? 'AI' : `Câu ${String(question.number).padStart(3, '0')}`}. ${question.prompt}`;
   els.bookmark.classList.toggle('active', state.progress.bookmarks.includes(question.id));
   els.bookmark.textContent = state.progress.bookmarks.includes(question.id) ? '★' : '☆';
@@ -771,6 +800,7 @@ function decorateOption(element, question, letter, selected) {
 
 function showAnswer(question, selected) {
   const correct = isCorrectAnswer(question, selected);
+  const questionType = getQuestionType(question);
   els.answerPanel.hidden = false;
   els.answerBanner.classList.toggle('wrong', !correct);
   els.answerBanner.textContent = correct
@@ -786,7 +816,26 @@ function showAnswer(question, selected) {
     els.tips.appendChild(item);
   }
 
-  for (const letter of getOptionLetters(question)) {
+  if (questionType === 'fill') {
+    els.analysisSection.hidden = false;
+    els.analysisTitle.textContent = 'Đáp án chấp nhận';
+    const item = document.createElement('div');
+    item.className = `analysis-item fill-accepted ${correct ? 'correct' : 'wrong'}`;
+    item.innerHTML = `
+      <strong>Bạn đã nhập:</strong> <span class="selected-answer"></span>
+      <strong>Đáp án có thể nhận:</strong> <span class="accepted-answer"></span>
+    `;
+    item.querySelector('.selected-answer').textContent = formatSelected(selected);
+    item.querySelector('.accepted-answer').textContent = formatAnswer(question);
+    els.analysis.appendChild(item);
+    return;
+  }
+
+  const optionLetters = getOptionLetters(question);
+  els.analysisSection.hidden = !optionLetters.length;
+  els.analysisTitle.textContent = 'Phân tích lựa chọn';
+
+  for (const letter of optionLetters) {
     const item = document.createElement('div');
     item.className = 'analysis-item';
     item.classList.toggle('correct', normalizeAnswerList(question.answer).includes(letter));
@@ -897,6 +946,28 @@ function moveQuestion(delta) {
   if (!state.filtered.length) return;
   state.currentIndex = (state.currentIndex + delta + state.filtered.length) % state.filtered.length;
   renderQuestion();
+}
+
+function jumpToQuestion() {
+  if (!state.filtered.length) return;
+  const requested = Number.parseInt(els.questionJump.value, 10);
+  if (!Number.isFinite(requested)) return;
+  const nextIndex = Math.min(Math.max(requested, 1), state.filtered.length) - 1;
+  state.currentIndex = nextIndex;
+  renderQuestion();
+}
+
+function moveToNextMatch(predicate) {
+  if (!state.filtered.length) return;
+  const total = state.filtered.length;
+  for (let step = 1; step <= total; step += 1) {
+    const nextIndex = (state.currentIndex + step) % total;
+    if (predicate(state.filtered[nextIndex])) {
+      state.currentIndex = nextIndex;
+      renderQuestion();
+      return;
+    }
+  }
 }
 
 function shuffleCurrentSet() {

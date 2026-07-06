@@ -224,14 +224,23 @@
                 <h3>Mẹo làm nhanh</h3>
                 <ul id="answer-tips"></ul>
               </div>
-              <div class="answer-section">
-                <h3>Phân tích lựa chọn</h3>
+              <div id="option-analysis-section" class="answer-section">
+                <h3 id="option-analysis-title">Phân tích lựa chọn</h3>
                 <div id="option-analysis" class="analysis-grid"></div>
               </div>
             </div>
           </div>
 
           <div class="control-bar">
+            <div class="quick-jump" aria-label="Điều hướng nhanh">
+              <label>
+                <span>Nhảy tới</span>
+                <input id="question-jump" type="number" min="1" inputmode="numeric" placeholder="Số câu">
+              </label>
+              <button id="jump-btn" class="secondary-btn" type="button">Đi tới</button>
+              <button id="next-unanswered-btn" class="secondary-btn" type="button">Chưa làm</button>
+              <button id="next-wrong-btn" class="secondary-btn" type="button">Câu sai</button>
+            </div>
             <button id="prev-btn" class="secondary-btn" type="button">Câu trước</button>
             <button id="next-btn" class="primary-btn" type="button">Câu tiếp</button>
           </div>
@@ -305,6 +314,7 @@ Mỗi câu bắt buộc có:
 - questionType: single, multiple hoặc fill.
 - Câu single/multiple có 4-8 lựa chọn A-H.
 - Câu single có answer là một chữ cái; multiple có answer là mảng chữ cái; fill có answer là mảng text được chấp nhận.
+- Câu fill vẫn bắt buộc có explanation, example và tips; giải thích vì sao đáp án text đúng và các cách viết tương đương.
 - Giải thích rõ ràng vì sao đúng và vì sao các lựa chọn còn lại sai hoặc dễ nhầm.
 - Ví dụ cụ thể trong môn.
 - 2-4 mẹo khi gặp dạng bài tương tự trong đề thi.
@@ -395,6 +405,7 @@ Yêu cầu nội dung:
 - Chương/chủ đề: [CHƯƠNG_HOẶC_CHỦ_ĐỀ].
 - Phối hợp 3 loại câu khi phù hợp: single, multiple, fill.
 - Với single: answer là "A"; với multiple: answer là ["A","C"]; với fill: options là {} và answer là ["đáp án 1","đáp án tương đương"].
+- Câu fill vẫn phải có explanation/example/tips đầy đủ; explanation cần nêu vì sao đáp án ngắn đó đúng và các cách viết tương đương.
 - Câu trắc nghiệm có thể có 4-8 lựa chọn, dùng các khóa A-H.
 - Giải thích phải đủ rõ để người học hiểu ngay sau khi chọn đáp án.
 - Sắp xếp câu hỏi theo chapter rồi topic.</pre>

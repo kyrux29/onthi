@@ -350,8 +350,8 @@ function buildRequestPrompt({
     '- Kiểu câu questionType: single, multiple hoặc fill.',
     '- Câu single: có 4-8 lựa chọn A-H, answer là một chữ cái.',
     '- Câu multiple: có 4-8 lựa chọn A-H, answer là mảng chữ cái đúng, ví dụ ["A","C"].',
-    '- Câu fill: không cần lựa chọn; options là object rỗng {}, answer là mảng các đáp án text được chấp nhận.',
-    '- Giải thích: giải thích vì sao đáp án đúng, chỉ ra điểm sai hoặc bẫy của các lựa chọn còn lại nếu có.',
+    '- Câu fill: không cần lựa chọn; options là object rỗng {}, answer là mảng các đáp án text được chấp nhận; vẫn bắt buộc có explanation/example/tips đầy đủ.',
+    '- Giải thích: giải thích vì sao đáp án đúng; với single/multiple chỉ ra điểm sai hoặc bẫy của các lựa chọn còn lại nếu có; với fill nêu vì sao đáp án ngắn đúng và các cách viết tương đương.',
     '- Ví dụ trong môn: đưa ví dụ cụ thể thuộc Nguyên lý hệ điều hành, như tiến trình, điều phối CPU, semaphore, deadlock, phân trang, FAT hoặc điều phối đĩa.',
     '- Mẹo khi gặp: nêu 2-4 mẹo nhận dạng dạng bài, công thức, cách vẽ bảng/trục hoặc cách loại trừ đáp án.',
     '- Phân loại: mỗi câu phải ghi đúng subject, chapter, topic; nếu tài liệu có chương thì giữ tên chương trong tài liệu.',
@@ -366,7 +366,7 @@ function defaultPromptFrame() {
   return [
     'Hãy phân tích tài liệu được upload và tạo bộ câu hỏi ôn thi trắc nghiệm cho môn học tương ứng.',
     'Ưu tiên câu hỏi có tính thi cử: định nghĩa, phân biệt khái niệm, bài tính ngắn, bẫy thường gặp.',
-    'Mỗi câu phải có questionType. Tạo phối hợp câu một đáp án, chọn nhiều đáp án và điền đáp án khi tài liệu phù hợp. Câu trắc nghiệm có thể có 4-8 lựa chọn A-H.'
+    'Mỗi câu phải có questionType. Tạo phối hợp câu một đáp án, chọn nhiều đáp án và điền đáp án khi tài liệu phù hợp. Câu fill vẫn phải có giải thích, ví dụ và mẹo làm bài. Câu trắc nghiệm có thể có 4-8 lựa chọn A-H.'
   ].join(' ');
 }
 
