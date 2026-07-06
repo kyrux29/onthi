@@ -112,6 +112,13 @@ DATABASE_SSL=true
 
 Lưu ý: Vercel không chạy PostgreSQL nội bộ như Docker Compose. Hãy dùng một Postgres managed bên ngoài như Vercel Postgres, Neon, Supabase hoặc Railway rồi điền `DATABASE_URL`.
 
+Nếu trang Vercel báo `FUNCTION_INVOCATION_FAILED`, mở **Vercel Dashboard → Project → Logs** để xem stack trace. Lỗi thường gặp:
+
+- Thiếu hoặc sai `DATABASE_URL`.
+- Database yêu cầu SSL nhưng chưa đặt `DATABASE_SSL=true`.
+- Chưa đặt `AUTH_SECRET`.
+- Chức năng AI/PDF chạy quá timeout serverless. Với tác vụ upload tài liệu lớn, Docker/Railway/Fly.io sẽ ổn định hơn Vercel Hobby.
+
 ## Kiểm tra dữ liệu
 
 ```bash

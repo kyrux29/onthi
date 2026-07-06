@@ -3,7 +3,13 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "maxDuration": 60
+      "maxDuration": 10,
+      "includeFiles": [
+        "public/**",
+        "src/**",
+        "subjects/**",
+        "bo_400_cau_trac_nghiem_OS.md"
+      ]
     }
   },
   "rewrites": [

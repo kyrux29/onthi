@@ -1,6 +1,4 @@
 const path = require('path');
-const mammoth = require('mammoth');
-const { PDFParse } = require('pdf-parse');
 
 const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.csv', '.log']);
 
@@ -12,6 +10,7 @@ async function extractTextFromFile(file) {
   }
 
   if (extension === '.pdf') {
+    const { PDFParse } = require('pdf-parse');
     const parser = new PDFParse({ data: file.buffer });
     try {
       const parsed = await parser.getText();
@@ -22,6 +21,7 @@ async function extractTextFromFile(file) {
   }
 
   if (extension === '.docx') {
+    const mammoth = require('mammoth');
     const parsed = await mammoth.extractRawText({ buffer: file.buffer });
     return parsed.value || '';
   }
