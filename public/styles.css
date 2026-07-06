@@ -1136,11 +1136,13 @@ textarea:focus {
   position: sticky;
   bottom: 0;
   z-index: 8;
+  align-items: end;
   justify-content: space-between;
   flex-wrap: wrap;
-  margin-top: 16px;
-  padding: 12px 0 2px;
-  background: linear-gradient(180deg, transparent, rgba(239, 228, 201, 0.95) 42%);
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 0 4px;
+  background: linear-gradient(180deg, transparent, rgba(239, 228, 201, 0.96) 38%);
 }
 
 .quick-jump {
@@ -1148,20 +1150,20 @@ textarea:focus {
   align-items: end;
   flex: 0 1 auto;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid rgba(92, 70, 42, 0.15);
-  border-radius: var(--radius);
-  background: rgba(255, 248, 223, 0.82);
-  box-shadow: var(--shadow-soft);
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0;
+  margin-left: auto;
 }
 
 .nav-actions {
+  flex: 0 0 auto;
   flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .quick-jump label {
-  width: 112px;
+  width: 96px;
 }
 
 .quick-jump label span {
@@ -1171,6 +1173,13 @@ textarea:focus {
 
 .quick-jump input {
   min-height: 40px;
+  text-align: center;
+}
+
+.quick-jump .secondary-btn,
+.nav-actions .secondary-btn,
+.nav-actions .primary-btn {
+  min-width: 92px;
 }
 
 .ai-layout,
