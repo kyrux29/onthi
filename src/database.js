@@ -13,9 +13,27 @@ const pool = databaseUrl
     })
   : null;
 let ready = false;
+let initializing = null;
+let lastInitError = null;
 
 async function initDatabase() {
   if (!pool) return false;
+  if (ready) return true;
+  if (initializing) return initializing;
+
+  initializing = initializeDatabase();
+  try {
+    return await initializing;
+  } catch (error) {
+    lastInitError = error;
+    throw error;
+  } finally {
+    initializing = null;
+  }
+}
+
+async function initializeDatabase() {
+  lastInitError = null;
 
   await pool.query(`
     create table if not exists ai_runs (
@@ -75,6 +93,28 @@ function isDatabaseConfigured() {
 
 function isDatabaseReady() {
   return ready;
+}
+
+function getDatabaseError() {
+  return lastInitError;
+}
+
+async function ensureDatabaseReady() {
+  if (!pool) {
+    const error = new Error('Database chưa được cấu hình. Hãy đặt DATABASE_URL hoặc POSTGRES_URL.');
+    error.status = 503;
+    throw error;
+  }
+
+  if (ready) return true;
+
+  try {
+    await initDatabase();
+    return true;
+  } catch (error) {
+    lastInitError = error;
+    throw error;
+  }
 }
 
 async function saveAIRun({ extracted, result, params, ownerUserId, shared = false }) {
@@ -506,9 +546,11 @@ module.exports = {
   closeDatabase,
   changeUserPassword,
   createUser,
+  ensureDatabaseReady,
   findUserById,
   findUserByUsername,
   getAIRun,
+  getDatabaseError,
   getProgress,
   initDatabase,
   isDatabaseConfigured,

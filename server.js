@@ -13,9 +13,11 @@ const {
   closeDatabase,
   changeUserPassword,
   createUser,
+  ensureDatabaseReady,
   findUserById,
   findUserByUsername,
   getAIRun,
+  getDatabaseError,
   getProgress,
   initDatabase,
   isDatabaseConfigured,
@@ -78,12 +80,14 @@ app.get('/api/auth/me', attachUser, (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
+  const databaseError = getDatabaseError();
   res.json({
     ok: true,
     aiConfigured: Boolean(process.env.OPENAI_API_KEY),
     model: process.env.OPENAI_MODEL || 'gpt-5.5',
     databaseConfigured: isDatabaseConfigured(),
-    databaseReady: isDatabaseReady()
+    databaseReady: isDatabaseReady(),
+    databaseError: databaseError ? sanitizeErrorMessage(databaseError.message) : ''
   });
 });
 
@@ -392,6 +396,14 @@ async function attachUser(req, res, next) {
 async function waitForDatabase() {
   if (!isDatabaseConfigured() || isDatabaseReady()) return;
   await databaseReady;
+  if (!isDatabaseReady()) await ensureDatabaseReady();
+}
+
+function sanitizeErrorMessage(message = '') {
+  return String(message)
+    .replace(/postgres(?:ql)?:\/\/[^@\s]+@/gi, 'postgres://***@')
+    .replace(/password=[^&\s]+/gi, 'password=***')
+    .replace(/:[^:@/\s]+@/g, ':***@');
 }
 
 function requireAuth(req, res, next) {
