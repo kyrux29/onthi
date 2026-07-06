@@ -184,6 +184,7 @@ function bindEvents() {
     return answer && !answer.correct;
   }));
   els.refreshRanking.addEventListener('click', loadRanking);
+  els.userStatus.addEventListener('click', () => activatePanel('settings-panel'));
   els.bookmark.addEventListener('click', toggleBookmark);
   els.documentInput.addEventListener('change', updateFileLabel);
   els.aiForm.addEventListener('submit', generateFromDocuments);

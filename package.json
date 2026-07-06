@@ -4,6 +4,7 @@
   "description": "Trang web ôn thi trắc nghiệm Nguyên lý Hệ điều hành với AI tạo câu hỏi từ tài liệu.",
   "main": "server.js",
   "scripts": {
+    "build:ui": "vite build --config vite.react-ui.config.mjs",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node scripts/validate-questions.js"
@@ -23,6 +24,12 @@
     "mammoth": "^1.11.0",
     "multer": "^2.0.2",
     "pdf-parse": "^2.4.5",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.3",
+    "vite": "^8.1.3"
   }
 }

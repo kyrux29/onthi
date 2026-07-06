@@ -7,7 +7,19 @@
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
+    <div id="react-enhancements" hidden></div>
     <section id="auth-screen" class="auth-screen">
+      <section class="auth-intro" aria-label="Giới thiệu nền tảng">
+        <p class="eyebrow">Exam Workspace</p>
+        <h1>Ôn tập có cấu trúc, hiểu lời giải ngay sau khi làm.</h1>
+        <p>Quản lý bộ câu hỏi theo môn, chương, chủ đề; lưu tiến độ riêng từng tài khoản; tạo câu hỏi mới từ tài liệu khi cần mở rộng ngân hàng đề.</p>
+        <div class="auth-points">
+          <span>Theo dõi tiến độ</span>
+          <span>Giải thích tức thì</span>
+          <span>AI tài liệu</span>
+        </div>
+      </section>
+
       <form id="login-form" class="auth-card">
         <div class="brand auth-brand">
           <div class="brand-mark" aria-hidden="true">
@@ -105,12 +117,12 @@
             <button class="tab" type="button" data-panel="ranking-panel">Xếp hạng</button>
             <button class="tab" type="button" data-panel="ai-panel">AI tài liệu</button>
             <button class="tab" type="button" data-panel="import-panel">Nạp câu hỏi</button>
-            <button class="tab" type="button" data-panel="settings-panel">Cài đặt</button>
+            <button class="tab" type="button" data-panel="about-panel">About</button>
             <button class="tab admin-only" type="button" data-panel="admin-panel" hidden>Quản trị</button>
           </div>
           <div class="topbar-actions">
             <div class="ai-status" id="ai-status">AI: đang kiểm tra</div>
-            <div class="user-pill" id="user-status"></div>
+            <button class="user-pill" id="user-status" type="button" title="Cài đặt tài khoản"></button>
             <button id="logout-btn" class="ghost-btn" type="button">Đăng xuất</button>
           </div>
         </section>
@@ -206,9 +218,21 @@
             </div>
 
             <aside class="practice-tools" aria-label="Điều hướng câu hỏi">
+              <div class="practice-tools-header">
+                <div>
+                  <p class="eyebrow">Điều hướng</p>
+                  <h2>Danh sách câu</h2>
+                </div>
+                <small id="question-nav-note">Click để nhảy nhanh</small>
+              </div>
               <div class="side-actions">
                 <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
                 <button id="reset-progress-btn" class="ghost-btn" type="button">Xóa tiến độ</button>
+              </div>
+              <div class="question-legend" aria-label="Chú thích trạng thái câu hỏi">
+                <span><i class="legend-dot current"></i>Hiện tại</span>
+                <span><i class="legend-dot correct"></i>Đúng</span>
+                <span><i class="legend-dot wrong"></i>Sai</span>
               </div>
               <nav id="question-list" class="question-list" aria-label="Danh sách câu hỏi"></nav>
             </aside>
@@ -464,6 +488,33 @@ Yêu cầu nội dung:
           </div>
         </section>
 
+        <section id="about-panel" class="panel">
+          <div class="about-layout">
+            <section class="home-section about-hero">
+              <div>
+                <p class="eyebrow">About</p>
+                <h2>Tác giả: Kyrux</h2>
+                <p>Ứng dụng được xây dựng để hỗ trợ việc ôn tập trắc nghiệm theo cách thực dụng: chọn bộ câu hỏi, làm bài, xem giải thích ngay và theo dõi tiến độ học tập. Trọng tâm của dự án là tạo một công cụ học gọn, dễ mở rộng cho nhiều môn và có thể tự bổ sung câu hỏi bằng tài liệu.</p>
+              </div>
+            </section>
+
+            <section class="home-section platform-overview">
+              <article>
+                <strong>Vai trò</strong>
+                <span>Thiết kế và phát triển hệ thống luyện tập, quản lý tài khoản, lưu tiến độ và ngân hàng câu hỏi.</span>
+              </article>
+              <article>
+                <strong>Mục tiêu</strong>
+                <span>Tạo một nền tảng ôn thi dễ dùng, ưu tiên trải nghiệm làm bài nhanh, lời giải rõ ràng và dữ liệu học tập được lưu bền vững.</span>
+              </article>
+              <article>
+                <strong>Định hướng</strong>
+                <span>Mở rộng cho nhiều môn học, nhiều dạng câu hỏi và tích hợp AI để phân tích tài liệu thành bộ câu hỏi có cấu trúc.</span>
+              </article>
+            </section>
+          </div>
+        </section>
+
         <section id="admin-panel" class="panel">
           <div class="admin-layout">
             <form id="create-user-form" class="upload-box">
@@ -505,6 +556,7 @@ Yêu cầu nội dung:
       </main>
     </div>
 
+    <script src="/react-ui.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
 </html>
