@@ -7,10 +7,7 @@ const databaseUrl = process.env.DATABASE_URL ||
   process.env.POSTGRES_PRISMA_URL ||
   process.env.POSTGRES_URL_NON_POOLING;
 const pool = databaseUrl
-  ? new Pool({
-      connectionString: databaseUrl,
-      ssl: shouldUseSSL() ? { rejectUnauthorized: false } : undefined
-    })
+  ? new Pool(buildPoolConfig(databaseUrl))
   : null;
 let ready = false;
 let initializing = null;
@@ -518,6 +515,26 @@ function shouldUseSSL() {
   return process.env.DATABASE_SSL === 'true' ||
     process.env.PGSSLMODE === 'require' ||
     /sslmode=require/i.test(databaseUrl || '');
+}
+
+function buildPoolConfig(connectionString) {
+  const ssl = shouldUseSSL() ? { rejectUnauthorized: false } : undefined;
+  return {
+    connectionString: normalizeConnectionString(connectionString),
+    ssl
+  };
+}
+
+function normalizeConnectionString(connectionString) {
+  try {
+    const url = new URL(connectionString);
+    // Let node-postgres use the explicit ssl object above. Keeping sslmode in
+    // the URL can make pg re-enable certificate verification on some hosts.
+    url.searchParams.delete('sslmode');
+    return url.toString();
+  } catch {
+    return connectionString;
+  }
 }
 
 function canAccessAIRun(run, user) {
