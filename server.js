@@ -23,6 +23,7 @@ const {
   isDatabaseConfigured,
   isDatabaseReady,
   listAIRuns,
+  listRanking,
   listSavedQuestionBanks,
   listUsers,
   saveAIRun,
@@ -356,6 +357,14 @@ app.put('/api/progress', async (req, res, next) => {
       ok: true,
       progress
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/ranking', async (req, res, next) => {
+  try {
+    res.json({ ranking: await listRanking({ limit: req.query.limit }) });
   } catch (error) {
     next(error);
   }

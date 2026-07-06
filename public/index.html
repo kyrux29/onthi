@@ -61,6 +61,10 @@
             <strong id="stat-done">0</strong>
             <span>Đã làm</span>
           </div>
+          <div>
+            <strong id="stat-hours">0 phút</strong>
+            <span>Đã học</span>
+          </div>
         </div>
 
         <div class="filter-stack">
@@ -91,12 +95,6 @@
           </label>
         </div>
 
-        <div class="side-actions">
-          <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
-          <button id="reset-progress-btn" class="ghost-btn" type="button">Xóa tiến độ</button>
-        </div>
-
-        <nav id="question-list" class="question-list" aria-label="Danh sách câu hỏi"></nav>
       </aside>
 
       <main class="workspace">
@@ -104,6 +102,7 @@
           <div class="tabs" role="tablist" aria-label="Khu vực">
             <button class="tab active" type="button" data-panel="home-panel">Trang chủ</button>
             <button class="tab" type="button" data-panel="practice-panel">Luyện tập</button>
+            <button class="tab" type="button" data-panel="ranking-panel">Xếp hạng</button>
             <button class="tab" type="button" data-panel="ai-panel">AI tài liệu</button>
             <button class="tab" type="button" data-panel="import-panel">Nạp câu hỏi</button>
             <button class="tab" type="button" data-panel="settings-panel">Cài đặt</button>
@@ -120,70 +119,26 @@
           <div class="home-grid">
             <section class="home-hero">
               <div>
-                <p class="eyebrow">Tổng quan học tập</p>
-                <h2 id="home-greeting">Chào mừng quay lại</h2>
-                <p id="home-summary">Chọn một bộ câu hỏi để bắt đầu ôn tập.</p>
+                <p class="eyebrow">Nền tảng ôn thi</p>
+                <h2 id="home-greeting">Ôn thi trắc nghiệm</h2>
+                <p id="home-summary">Tạo, nạp và luyện tập các bộ câu hỏi theo môn học, chương và chủ đề. Mỗi câu có đáp án, giải thích, ví dụ và mẹo làm bài để học nhanh hơn.</p>
               </div>
-              <div class="home-ring" aria-label="Tiến độ đúng">
-                <strong id="home-score">0%</strong>
-                <span>độ chính xác</span>
-              </div>
+              <button class="primary-btn home-cta" type="button" data-action="continue">Bắt đầu luyện tập</button>
             </section>
 
-            <div class="home-stats">
+            <section class="home-section platform-overview">
               <article>
-                <span>Đã làm</span>
-                <strong id="home-done">0</strong>
+                <strong>Chọn bộ câu hỏi trong Luyện tập</strong>
+                <span>Mỗi bộ được phân theo môn, chương, chủ đề và lưu tiến độ riêng cho từng tài khoản.</span>
               </article>
               <article>
-                <span>Câu đúng</span>
-                <strong id="home-correct">0</strong>
+                <strong>Học theo lời giải</strong>
+                <span>Chọn đáp án là thấy giải thích, ví dụ trong môn và mẹo nhận dạng dạng bài ngay dưới câu hỏi.</span>
               </article>
               <article>
-                <span>Đánh dấu</span>
-                <strong id="home-bookmarks">0</strong>
+                <strong>Tự mở rộng ngân hàng đề</strong>
+                <span>Nạp JSON câu hỏi hoặc dùng AI tài liệu với API key của bạn để tạo bộ câu hỏi mới.</span>
               </article>
-              <article>
-                <span>Bộ câu hỏi</span>
-                <strong id="home-banks">0</strong>
-              </article>
-            </div>
-
-            <section class="home-section">
-              <div class="result-header">
-                <div>
-                  <p class="eyebrow">Lối tắt</p>
-                  <h2>Học nhanh</h2>
-                </div>
-              </div>
-              <div class="quick-actions">
-                <button class="quick-card" type="button" data-action="continue">
-                  <strong>Tiếp tục luyện tập</strong>
-                  <span>Quay lại bộ câu hỏi đang chọn</span>
-                </button>
-                <button class="quick-card" type="button" data-action="wrong">
-                  <strong>Ôn câu sai</strong>
-                  <span>Lọc các câu đã trả lời sai</span>
-                </button>
-                <button class="quick-card" type="button" data-action="bookmarked">
-                  <strong>Câu đã đánh dấu</strong>
-                  <span>Xem lại các câu cần nhớ</span>
-                </button>
-                <button class="quick-card" type="button" data-action="ai">
-                  <strong>Tạo câu hỏi AI</strong>
-                  <span>Upload tài liệu để sinh đề</span>
-                </button>
-              </div>
-            </section>
-
-            <section class="home-section">
-              <div class="result-header">
-                <div>
-                  <p class="eyebrow">Kho câu hỏi</p>
-                  <h2>Bộ có thể học</h2>
-                </div>
-              </div>
-              <div id="home-bank-list" class="home-bank-list"></div>
             </section>
           </div>
         </section>
@@ -197,52 +152,81 @@
             <div id="bank-cards" class="bank-cards"></div>
           </div>
 
-          <div class="question-card">
-            <div class="question-meta">
-              <span id="question-chapter">Đang tải</span>
-              <span id="question-position">0 / 0</span>
+          <div class="practice-workspace">
+            <div class="practice-main">
+              <div class="question-card">
+                <div class="question-meta">
+                  <span id="question-chapter">Đang tải</span>
+                  <span id="question-position">0 / 0</span>
+                </div>
+
+                <div class="question-heading">
+                  <h2 id="question-title">Đang tải bộ câu hỏi...</h2>
+                  <button id="bookmark-btn" class="icon-btn" type="button" aria-label="Đánh dấu câu này">☆</button>
+                </div>
+
+                <div id="options" class="options"></div>
+
+                <div id="answer-panel" class="answer-panel" hidden>
+                  <div class="answer-banner" id="answer-banner"></div>
+                  <div class="answer-section">
+                    <h3>Giải thích</h3>
+                    <p id="answer-explanation"></p>
+                  </div>
+                  <div id="answer-example-section" class="answer-section" hidden>
+                    <h3>Ví dụ trong môn</h3>
+                    <p id="answer-example"></p>
+                  </div>
+                  <div class="answer-section">
+                    <h3>Mẹo làm nhanh</h3>
+                    <ul id="answer-tips"></ul>
+                  </div>
+                  <div id="option-analysis-section" class="answer-section">
+                    <h3 id="option-analysis-title">Phân tích lựa chọn</h3>
+                    <div id="option-analysis" class="analysis-grid"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="control-bar">
+                <div class="nav-actions">
+                  <button id="prev-btn" class="secondary-btn" type="button">Câu trước</button>
+                  <button id="next-btn" class="primary-btn" type="button">Câu tiếp</button>
+                </div>
+                <div class="quick-jump" aria-label="Điều hướng nhanh">
+                  <label>
+                    <span>Nhảy tới</span>
+                    <input id="question-jump" type="number" min="1" inputmode="numeric" placeholder="Số câu">
+                  </label>
+                  <button id="jump-btn" class="secondary-btn" type="button">Đi tới</button>
+                  <button id="next-unanswered-btn" class="secondary-btn" type="button">Chưa làm</button>
+                  <button id="next-wrong-btn" class="secondary-btn" type="button">Câu sai</button>
+                </div>
+              </div>
             </div>
 
-            <div class="question-heading">
-              <h2 id="question-title">Đang tải bộ câu hỏi...</h2>
-              <button id="bookmark-btn" class="icon-btn" type="button" aria-label="Đánh dấu câu này">☆</button>
-            </div>
-
-            <div id="options" class="options"></div>
-
-            <div id="answer-panel" class="answer-panel" hidden>
-              <div class="answer-banner" id="answer-banner"></div>
-              <div class="answer-section">
-                <h3>Giải thích</h3>
-                <p id="answer-explanation"></p>
+            <aside class="practice-tools" aria-label="Điều hướng câu hỏi">
+              <div class="side-actions">
+                <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
+                <button id="reset-progress-btn" class="ghost-btn" type="button">Xóa tiến độ</button>
               </div>
-              <div id="answer-example-section" class="answer-section" hidden>
-                <h3>Ví dụ trong môn</h3>
-                <p id="answer-example"></p>
-              </div>
-              <div class="answer-section">
-                <h3>Mẹo làm nhanh</h3>
-                <ul id="answer-tips"></ul>
-              </div>
-              <div id="option-analysis-section" class="answer-section">
-                <h3 id="option-analysis-title">Phân tích lựa chọn</h3>
-                <div id="option-analysis" class="analysis-grid"></div>
-              </div>
-            </div>
+              <nav id="question-list" class="question-list" aria-label="Danh sách câu hỏi"></nav>
+            </aside>
           </div>
+        </section>
 
-          <div class="control-bar">
-            <div class="quick-jump" aria-label="Điều hướng nhanh">
-              <label>
-                <span>Nhảy tới</span>
-                <input id="question-jump" type="number" min="1" inputmode="numeric" placeholder="Số câu">
-              </label>
-              <button id="jump-btn" class="secondary-btn" type="button">Đi tới</button>
-              <button id="next-unanswered-btn" class="secondary-btn" type="button">Chưa làm</button>
-              <button id="next-wrong-btn" class="secondary-btn" type="button">Câu sai</button>
-            </div>
-            <button id="prev-btn" class="secondary-btn" type="button">Câu trước</button>
-            <button id="next-btn" class="primary-btn" type="button">Câu tiếp</button>
+        <section id="ranking-panel" class="panel">
+          <div class="ranking-layout">
+            <section class="home-section ranking-intro">
+              <div>
+                <p class="eyebrow">Thi đua học tập</p>
+                <h2>Bảng xếp hạng tài khoản</h2>
+                <p>Ranking dựa trên số câu trả lời đúng, sau đó xét độ chính xác và thời gian học trên nền tảng.</p>
+              </div>
+              <button id="refresh-ranking-btn" class="secondary-btn" type="button">Tải lại</button>
+            </section>
+
+            <div id="ranking-list" class="ranking-list"></div>
           </div>
         </section>
 

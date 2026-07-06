@@ -351,6 +351,51 @@ async function saveProgress(userId, progress) {
   return normalized;
 }
 
+async function listRanking({ limit = 50 } = {}) {
+  requireDatabase();
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const { rows } = await pool.query(
+    `select
+      users.id,
+      users.username,
+      users.role,
+      users.created_at as "createdAt",
+      coalesce(count(answer_entry.key), 0)::integer as done,
+      coalesce(count(answer_entry.key) filter (where answer_entry.value->>'correct' = 'true'), 0)::integer as correct,
+      case
+        when coalesce(count(answer_entry.key), 0) = 0 then 0
+        else round((count(answer_entry.key) filter (where answer_entry.value->>'correct' = 'true')) * 100.0 / count(answer_entry.key))::integer
+      end as accuracy,
+      case
+        when user_progress.progress->>'studySeconds' ~ '^[0-9]+$' then (user_progress.progress->>'studySeconds')::integer
+        else 0
+      end as "studySeconds"
+    from users
+    left join user_progress on user_progress.user_id = users.id
+    left join lateral jsonb_each(
+      case
+        when jsonb_typeof(user_progress.progress->'answers') = 'object' then user_progress.progress->'answers'
+        else '{}'::jsonb
+      end
+    ) as answer_entry on true
+    group by users.id, users.username, users.role, users.created_at, user_progress.progress
+    order by correct desc, accuracy desc, "studySeconds" desc, users.username asc
+    limit $1`,
+    [safeLimit]
+  );
+
+  return rows.map((row, index) => ({
+    rank: index + 1,
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    done: Number(row.done) || 0,
+    correct: Number(row.correct) || 0,
+    accuracy: Number(row.accuracy) || 0,
+    studySeconds: Number(row.studySeconds) || 0
+  }));
+}
+
 async function setAIRunShared(id, shared) {
   requireDatabase();
   const { rows } = await pool.query(
@@ -503,7 +548,8 @@ async function changeUserPassword({ userId, currentPassword, newPassword }) {
 function normalizeProgress(progress) {
   return {
     answers: progress?.answers && typeof progress.answers === 'object' ? progress.answers : {},
-    bookmarks: Array.isArray(progress?.bookmarks) ? progress.bookmarks : []
+    bookmarks: Array.isArray(progress?.bookmarks) ? progress.bookmarks : [],
+    studySeconds: Math.max(0, Number.parseInt(progress?.studySeconds, 10) || 0)
   };
 }
 
@@ -573,6 +619,7 @@ module.exports = {
   isDatabaseConfigured,
   isDatabaseReady,
   listUsers,
+  listRanking,
   listSavedQuestionBanks,
   listAIRuns,
   saveAIRun,

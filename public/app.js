@@ -9,10 +9,12 @@ const state = {
   filtered: [],
   currentIndex: 0,
   progress: { answers: {}, bookmarks: [] },
+  ranking: [],
   aiResult: null,
   currentUser: null,
   appStarted: false,
-  progressSyncTimer: null
+  progressSyncTimer: null,
+  studyTimer: null
 };
 
 const els = {
@@ -36,7 +38,7 @@ const els = {
   homeBookmarks: document.querySelector('#home-bookmarks'),
   homeBanks: document.querySelector('#home-banks'),
   homeBankList: document.querySelector('#home-bank-list'),
-  quickActions: document.querySelectorAll('.quick-card'),
+  quickActions: document.querySelectorAll('#home-panel [data-action]'),
   settingsUsername: document.querySelector('#settings-username'),
   settingsRole: document.querySelector('#settings-role'),
   settingsCreated: document.querySelector('#settings-created'),
@@ -45,6 +47,7 @@ const els = {
   total: document.querySelector('#stat-total'),
   score: document.querySelector('#stat-score'),
   done: document.querySelector('#stat-done'),
+  hours: document.querySelector('#stat-hours'),
   brandSubject: document.querySelector('#brand-subject'),
   brandTitle: document.querySelector('#brand-title'),
   bankSelect: document.querySelector('#bank-select'),
@@ -78,6 +81,8 @@ const els = {
   jump: document.querySelector('#jump-btn'),
   nextUnanswered: document.querySelector('#next-unanswered-btn'),
   nextWrong: document.querySelector('#next-wrong-btn'),
+  rankingList: document.querySelector('#ranking-list'),
+  refreshRanking: document.querySelector('#refresh-ranking-btn'),
   prev: document.querySelector('#prev-btn'),
   next: document.querySelector('#next-btn'),
   aiForm: document.querySelector('#ai-form'),
@@ -128,8 +133,10 @@ async function startApp() {
     loadSubjects(),
     loadHealth(),
     loadAIRuns(),
+    loadRanking(),
     state.currentUser.role === 'admin' ? loadUsers() : Promise.resolve()
   ]);
+  startStudyTimer();
 }
 
 function bindAuthEvents() {
@@ -176,6 +183,7 @@ function bindEvents() {
     const answer = state.progress.answers[question.id];
     return answer && !answer.correct;
   }));
+  els.refreshRanking.addEventListener('click', loadRanking);
   els.bookmark.addEventListener('click', toggleBookmark);
   els.documentInput.addEventListener('change', updateFileLabel);
   els.aiForm.addEventListener('submit', generateFromDocuments);
@@ -380,6 +388,48 @@ function renderUsers(users) {
   }
 }
 
+async function loadRanking() {
+  try {
+    const response = await fetch('/api/ranking?limit=100');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Không tải được bảng xếp hạng.');
+    state.ranking = data.ranking || [];
+    renderRanking();
+  } catch (error) {
+    if (els.rankingList) {
+      els.rankingList.innerHTML = `<div class="history-empty">${escapeHtml(error.message)}</div>`;
+    }
+  }
+}
+
+function renderRanking() {
+  if (!els.rankingList) return;
+  els.rankingList.innerHTML = '';
+
+  if (!state.ranking.length) {
+    els.rankingList.innerHTML = '<div class="history-empty">Chưa có dữ liệu xếp hạng.</div>';
+    return;
+  }
+
+  for (const user of state.ranking) {
+    const item = document.createElement('article');
+    item.className = 'ranking-item';
+    item.classList.toggle('current', user.id === state.currentUser?.id);
+    item.innerHTML = `
+      <strong class="ranking-rank">#${user.rank}</strong>
+      <div class="ranking-user">
+        <strong>${escapeHtml(user.username)}</strong>
+        <span>${escapeHtml(user.role)}${user.id === state.currentUser?.id ? ' · bạn' : ''}</span>
+      </div>
+      <div><span>Đúng</span><strong>${user.correct}</strong></div>
+      <div><span>Đã làm</span><strong>${user.done}</strong></div>
+      <div><span>Chính xác</span><strong>${user.accuracy}%</strong></div>
+      <div><span>Đã học</span><strong>${formatStudyTime(user.studySeconds)}</strong></div>
+    `;
+    els.rankingList.appendChild(item);
+  }
+}
+
 async function loadSubjects() {
   const response = await fetch('/api/subjects');
   const data = await response.json();
@@ -449,41 +499,11 @@ function renderBankCards() {
 }
 
 function renderHome() {
-  if (!els.homeBankList) return;
-
-  const stats = getProgressStats();
+  if (!els.homeGreeting || !els.homeSummary) return;
   els.homeGreeting.textContent = `Chào ${state.currentUser.username}`;
   els.homeSummary.textContent = state.activeBank
-    ? `Đang học: ${state.activeBank.subject || 'Môn học'} · ${state.activeBank.title || 'Bộ câu hỏi'}`
-    : 'Chọn một bộ câu hỏi để bắt đầu ôn tập.';
-  els.homeScore.textContent = `${stats.score}%`;
-  els.homeScore.closest('.home-ring').style.background = [
-    'radial-gradient(circle at center, #fff 56%, transparent 57%)',
-    `conic-gradient(var(--primary) 0 ${stats.score}%, rgba(15, 143, 114, 0.12) ${stats.score}% 100%)`
-  ].join(', ');
-  els.homeDone.textContent = stats.done;
-  els.homeCorrect.textContent = stats.correct;
-  els.homeBookmarks.textContent = state.progress.bookmarks.length;
-  els.homeBanks.textContent = state.banks.length;
-
-  els.homeBankList.innerHTML = '';
-  for (const bank of state.banks.slice(0, 8)) {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'home-bank-item';
-    item.innerHTML = `
-      <div>
-        <strong>${escapeHtml(bank.title)}</strong>
-        <span>${escapeHtml(bank.subject || 'Môn học')} · ${bank.total || 0} câu</span>
-      </div>
-      <small>${bank.source === 'database' ? (bank.shared ? 'Shared' : 'Riêng tư') : 'Tĩnh'}</small>
-    `;
-    item.addEventListener('click', async () => {
-      await selectBank(bank.id);
-      activatePanel('practice-panel');
-    });
-    els.homeBankList.appendChild(item);
-  }
+    ? `Bạn đang có bộ đang chọn: ${state.activeBank.subject || 'Môn học'} · ${state.activeBank.title || 'Bộ câu hỏi'}. Vào Luyện tập để chọn bộ khác hoặc tiếp tục làm bài.`
+    : 'Vào Luyện tập để chọn môn hoặc bộ câu hỏi, sau đó làm bài theo chương và chủ đề.';
 }
 
 function getProgressStats() {
@@ -921,12 +941,23 @@ function formatSelected(selected) {
   return Array.isArray(selected) ? selected.join(', ') : String(selected || '-');
 }
 
+function formatStudyTime(seconds) {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  if (minutes < 1) return '0 phút';
+  if (minutes < 60) return `${minutes} phút`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return restMinutes ? `${hours}g ${restMinutes}p` : `${hours} giờ`;
+}
+
 function renderStats() {
   const questions = allQuestions();
   const stats = getProgressStats();
   els.total.textContent = questions.length;
   els.done.textContent = stats.done;
   els.score.textContent = `${stats.score}%`;
+  els.hours.textContent = formatStudyTime(state.progress.studySeconds || 0);
   renderHome();
 }
 
@@ -992,7 +1023,7 @@ function toggleBookmark() {
 }
 
 function resetProgress() {
-  state.progress = { answers: {}, bookmarks: [] };
+  state.progress = { answers: {}, bookmarks: [], studySeconds: state.progress.studySeconds || 0 };
   saveProgress();
   applyFilters();
 }
@@ -1003,6 +1034,9 @@ function activatePanel(panelId) {
   }
   for (const panel of els.panels) {
     panel.classList.toggle('active', panel.id === panelId);
+  }
+  if (panelId === 'ranking-panel') {
+    loadRanking();
   }
 }
 
@@ -1327,16 +1361,28 @@ function loadProgress() {
     const parsed = JSON.parse(localStorage.getItem(getProgressStorageKey()));
     return {
       answers: parsed?.answers || {},
-      bookmarks: parsed?.bookmarks || []
+      bookmarks: parsed?.bookmarks || [],
+      studySeconds: Math.max(0, Number.parseInt(parsed?.studySeconds, 10) || 0)
     };
   } catch {
-    return { answers: {}, bookmarks: [] };
+    return { answers: {}, bookmarks: [], studySeconds: 0 };
   }
 }
 
 function saveProgress() {
   localStorage.setItem(getProgressStorageKey(), JSON.stringify(state.progress));
   queueProgressSync();
+}
+
+function startStudyTimer() {
+  if (state.studyTimer) return;
+  state.studyTimer = setInterval(() => {
+    if (!state.currentUser || document.hidden) return;
+    state.progress.studySeconds = Math.max(0, Number(state.progress.studySeconds) || 0) + 15;
+    localStorage.setItem(getProgressStorageKey(), JSON.stringify(state.progress));
+    renderStats();
+    queueProgressSync(800);
+  }, 15000);
 }
 
 function getProgressStorageKey() {
@@ -1372,6 +1418,9 @@ async function syncProgress() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ progress: state.progress })
     });
+    if (document.querySelector('#ranking-panel')?.classList.contains('active')) {
+      loadRanking();
+    }
   } catch {
     // LocalStorage remains the offline fallback.
   }
@@ -1380,6 +1429,7 @@ async function syncProgress() {
 function normalizeProgress(progress) {
   return {
     answers: progress?.answers && typeof progress.answers === 'object' ? progress.answers : {},
-    bookmarks: Array.isArray(progress?.bookmarks) ? progress.bookmarks : []
+    bookmarks: Array.isArray(progress?.bookmarks) ? progress.bookmarks : [],
+    studySeconds: Math.max(0, Number.parseInt(progress?.studySeconds, 10) || 0)
   };
 }
