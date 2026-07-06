@@ -46,6 +46,7 @@ app.use(express.static(path.join(rootDir, 'public')));
 
 app.post('/api/auth/login', async (req, res, next) => {
   try {
+    await waitForDatabase();
     const user = await findUserByUsername(req.body.username);
     const passwordMatches = user
       ? await bcrypt.compare(String(req.body.password || ''), user.passwordHash)
@@ -370,6 +371,7 @@ app.use((error, req, res, _next) => {
 
 async function attachUser(req, res, next) {
   try {
+    await waitForDatabase();
     const token = parseCookies(req.headers.cookie)[authCookieName];
     const session = verifySessionToken(token);
     if (!session) {
@@ -385,6 +387,11 @@ async function attachUser(req, res, next) {
   } catch (error) {
     next(error);
   }
+}
+
+async function waitForDatabase() {
+  if (!isDatabaseConfigured() || isDatabaseReady()) return;
+  await databaseReady;
 }
 
 function requireAuth(req, res, next) {
