@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: os-exam-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-os_exam}
+      POSTGRES_USER: ${POSTGRES_USER:-os_exam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-os_exam_password}
+    volumes:
+      - os_exam_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-os_exam} -d ${POSTGRES_DB:-os_exam}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    build: .
+    image: os-exam-trainer:latest
+    container_name: os-exam-trainer
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${HOST_PORT:-3001}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-os_exam}:${POSTGRES_PASSWORD:-os_exam_password}@db:5432/${POSTGRES_DB:-os_exam}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.4}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+    restart: unless-stopped
+
+volumes:
+  os_exam_db:

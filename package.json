@@ -1,0 +1,28 @@
+{
+  "name": "os-exam-trainer",
+  "version": "1.0.0",
+  "description": "Trang web ôn thi trắc nghiệm Nguyên lý Hệ điều hành với AI tạo câu hỏi từ tài liệu.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node scripts/validate-questions.js"
+  },
+  "keywords": [
+    "os",
+    "quiz",
+    "openai",
+    "exam"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "mammoth": "^1.11.0",
+    "multer": "^2.0.2",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.22.0"
+  }
+}

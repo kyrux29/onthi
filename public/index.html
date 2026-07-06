@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ôn thi Hệ điều hành</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <section id="auth-screen" class="auth-screen">
+      <form id="login-form" class="auth-card">
+        <div class="brand auth-brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div>
+            <p class="eyebrow">Đăng nhập</p>
+            <h1>Ôn thi trắc nghiệm</h1>
+          </div>
+        </div>
+        <label>
+          <span>Username</span>
+          <input id="login-username" name="username" type="text" autocomplete="username" required>
+        </label>
+        <label>
+          <span>Mật khẩu</span>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="primary-btn" type="submit">Đăng nhập</button>
+        <p id="login-message" class="form-message"></p>
+      </form>
+    </section>
+
+    <div class="app-shell" hidden>
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div>
+            <p class="eyebrow" id="brand-subject">Kho câu hỏi</p>
+            <h1 id="brand-title">Ôn thi trắc nghiệm</h1>
+          </div>
+        </div>
+
+        <label class="subject-switcher">
+          <span>Môn / bộ câu hỏi</span>
+          <select id="bank-select"></select>
+        </label>
+
+        <div class="stats-grid" aria-label="Thống kê">
+          <div>
+            <strong id="stat-total">0</strong>
+            <span>Câu hỏi</span>
+          </div>
+          <div>
+            <strong id="stat-score">0%</strong>
+            <span>Đúng</span>
+          </div>
+          <div>
+            <strong id="stat-done">0</strong>
+            <span>Đã làm</span>
+          </div>
+        </div>
+
+        <div class="filter-stack">
+          <label>
+            <span>Tìm kiếm</span>
+            <input id="search-input" type="search" placeholder="tiến trình, LRU, SCAN...">
+          </label>
+          <label>
+            <span>Chương</span>
+            <select id="chapter-select">
+              <option value="">Tất cả chương</option>
+            </select>
+          </label>
+          <label>
+            <span>Chủ đề</span>
+            <select id="topic-select">
+              <option value="">Tất cả chủ đề</option>
+            </select>
+          </label>
+          <label>
+            <span>Chế độ</span>
+            <select id="mode-select">
+              <option value="study">Ôn từng câu</option>
+              <option value="wrong">Câu đã sai</option>
+              <option value="bookmarked">Đã đánh dấu</option>
+              <option value="generated">Câu AI tạo</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="side-actions">
+          <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
+          <button id="reset-progress-btn" class="ghost-btn" type="button">Xóa tiến độ</button>
+        </div>
+
+        <nav id="question-list" class="question-list" aria-label="Danh sách câu hỏi"></nav>
+      </aside>
+
+      <main class="workspace">
+        <section class="topbar">
+          <div class="tabs" role="tablist" aria-label="Khu vực">
+            <button class="tab active" type="button" data-panel="home-panel">Trang chủ</button>
+            <button class="tab" type="button" data-panel="practice-panel">Luyện tập</button>
+            <button class="tab" type="button" data-panel="ai-panel">AI tài liệu</button>
+            <button class="tab" type="button" data-panel="import-panel">Nạp câu hỏi</button>
+            <button class="tab" type="button" data-panel="settings-panel">Cài đặt</button>
+            <button class="tab admin-only" type="button" data-panel="admin-panel" hidden>Quản trị</button>
+          </div>
+          <div class="topbar-actions">
+            <div class="ai-status" id="ai-status">AI: đang kiểm tra</div>
+            <div class="user-pill" id="user-status"></div>
+            <button id="logout-btn" class="ghost-btn" type="button">Đăng xuất</button>
+          </div>
+        </section>
+
+        <section id="home-panel" class="panel active">
+          <div class="home-grid">
+            <section class="home-hero">
+              <div>
+                <p class="eyebrow">Tổng quan học tập</p>
+                <h2 id="home-greeting">Chào mừng quay lại</h2>
+                <p id="home-summary">Chọn một bộ câu hỏi để bắt đầu ôn tập.</p>
+              </div>
+              <div class="home-ring" aria-label="Tiến độ đúng">
+                <strong id="home-score">0%</strong>
+                <span>độ chính xác</span>
+              </div>
+            </section>
+
+            <div class="home-stats">
+              <article>
+                <span>Đã làm</span>
+                <strong id="home-done">0</strong>
+              </article>
+              <article>
+                <span>Câu đúng</span>
+                <strong id="home-correct">0</strong>
+              </article>
+              <article>
+                <span>Đánh dấu</span>
+                <strong id="home-bookmarks">0</strong>
+              </article>
+              <article>
+                <span>Bộ câu hỏi</span>
+                <strong id="home-banks">0</strong>
+              </article>
+            </div>
+
+            <section class="home-section">
+              <div class="result-header">
+                <div>
+                  <p class="eyebrow">Lối tắt</p>
+                  <h2>Học nhanh</h2>
+                </div>
+              </div>
+              <div class="quick-actions">
+                <button class="quick-card" type="button" data-action="continue">
+                  <strong>Tiếp tục luyện tập</strong>
+                  <span>Quay lại bộ câu hỏi đang chọn</span>
+                </button>
+                <button class="quick-card" type="button" data-action="wrong">
+                  <strong>Ôn câu sai</strong>
+                  <span>Lọc các câu đã trả lời sai</span>
+                </button>
+                <button class="quick-card" type="button" data-action="bookmarked">
+                  <strong>Câu đã đánh dấu</strong>
+                  <span>Xem lại các câu cần nhớ</span>
+                </button>
+                <button class="quick-card" type="button" data-action="ai">
+                  <strong>Tạo câu hỏi AI</strong>
+                  <span>Upload tài liệu để sinh đề</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="home-section">
+              <div class="result-header">
+                <div>
+                  <p class="eyebrow">Kho câu hỏi</p>
+                  <h2>Bộ có thể học</h2>
+                </div>
+              </div>
+              <div id="home-bank-list" class="home-bank-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="practice-panel" class="panel">
+          <div id="subject-landing" class="subject-landing">
+            <div>
+              <p class="eyebrow">Bắt đầu ôn tập</p>
+              <h2>Chọn môn hoặc bộ câu hỏi</h2>
+            </div>
+            <div id="bank-cards" class="bank-cards"></div>
+          </div>
+
+          <div class="question-card">
+            <div class="question-meta">
+              <span id="question-chapter">Đang tải</span>
+              <span id="question-position">0 / 0</span>
+            </div>
+
+            <div class="question-heading">
+              <h2 id="question-title">Đang tải bộ câu hỏi...</h2>
+              <button id="bookmark-btn" class="icon-btn" type="button" aria-label="Đánh dấu câu này">☆</button>
+            </div>
+
+            <div id="options" class="options"></div>
+
+            <div id="answer-panel" class="answer-panel" hidden>
+              <div class="answer-banner" id="answer-banner"></div>
+              <div class="answer-section">
+                <h3>Giải thích</h3>
+                <p id="answer-explanation"></p>
+              </div>
+              <div id="answer-example-section" class="answer-section" hidden>
+                <h3>Ví dụ trong môn</h3>
+                <p id="answer-example"></p>
+              </div>
+              <div class="answer-section">
+                <h3>Mẹo làm nhanh</h3>
+                <ul id="answer-tips"></ul>
+              </div>
+              <div class="answer-section">
+                <h3>Phân tích lựa chọn</h3>
+                <div id="option-analysis" class="analysis-grid"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="control-bar">
+            <button id="prev-btn" class="secondary-btn" type="button">Câu trước</button>
+            <button id="next-btn" class="primary-btn" type="button">Câu tiếp</button>
+          </div>
+        </section>
+
+        <section id="ai-panel" class="panel">
+          <div class="ai-layout">
+            <form id="ai-form" class="upload-box">
+              <div>
+                <p class="eyebrow">Tạo câu hỏi mới</p>
+                <h2>Phân tích tài liệu upload</h2>
+              </div>
+
+              <label class="file-drop">
+                <input id="document-input" name="documents" type="file" multiple accept=".txt,.md,.pdf,.docx,.csv,.log">
+                <span id="file-label">Chọn file PDF, DOCX, MD hoặc TXT</span>
+              </label>
+
+              <label class="user-api-key-field">
+                <span>API key cá nhân</span>
+                <input id="ai-api-key" name="apiKey" type="password" autocomplete="off" placeholder="Bắt buộc với user thường">
+              </label>
+
+              <label class="check-row admin-only" hidden>
+                <input id="ai-shared" name="shared" type="checkbox" value="true" checked>
+                <span>Share bộ câu hỏi này cho user</span>
+              </label>
+
+              <div class="ai-controls">
+                <label>
+                  <span>Số câu</span>
+                  <input name="count" type="number" min="1" max="200" value="20">
+                </label>
+                <label>
+                  <span>Độ khó</span>
+                  <select name="difficulty">
+                    <option>Trung bình</option>
+                    <option>Dễ</option>
+                    <option>Khó</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                <span>Môn</span>
+                <input id="ai-subject" name="subject" type="text" value="Nguyên lý hệ điều hành">
+              </label>
+
+              <div class="ai-controls">
+                <label>
+                  <span>Chương</span>
+                  <input id="ai-chapter" name="chapter" type="text" placeholder="VD: Chương 2 - Tiến trình">
+                </label>
+                <label>
+                  <span>Chủ đề</span>
+                  <input id="ai-topic" name="topic" type="text" placeholder="VD: Điều phối CPU">
+                </label>
+              </div>
+
+              <label>
+                <span>Trọng tâm bổ sung</span>
+                <input name="focus" type="text" value="Ôn thi trắc nghiệm theo chương và chủ đề">
+              </label>
+
+              <label>
+                <span>Khung prompt gửi AI</span>
+                <textarea id="prompt-frame" name="promptFrame" rows="9">Hãy phân tích tài liệu được upload và tạo bộ câu hỏi ôn thi trắc nghiệm cho môn học tương ứng.
+
+Mỗi câu bắt buộc có:
+- Câu hỏi rõ ràng, sát nội dung tài liệu.
+- questionType: single, multiple hoặc fill.
+- Câu single/multiple có 4-8 lựa chọn A-H.
+- Câu single có answer là một chữ cái; multiple có answer là mảng chữ cái; fill có answer là mảng text được chấp nhận.
+- Giải thích rõ ràng vì sao đúng và vì sao các lựa chọn còn lại sai hoặc dễ nhầm.
+- Ví dụ cụ thể trong môn.
+- 2-4 mẹo khi gặp dạng bài tương tự trong đề thi.
+- Phân loại rõ subject, chapter, topic để sắp xếp theo môn, chương và chủ đề.</textarea>
+              </label>
+
+              <button id="generate-btn" class="primary-btn" type="submit">Tạo câu hỏi</button>
+              <p id="ai-message" class="form-message"></p>
+            </form>
+
+            <div class="ai-result">
+              <div class="result-header">
+                <div>
+                  <p class="eyebrow">Kết quả AI</p>
+                  <h2>Bộ câu hỏi từ tài liệu</h2>
+                </div>
+                <button id="import-ai-btn" class="secondary-btn" type="button" disabled>Đưa vào luyện tập</button>
+              </div>
+
+              <div id="ai-summary" class="summary-box">Chưa có dữ liệu.</div>
+              <details class="prompt-preview">
+                <summary>Prompt request đã gửi</summary>
+                <pre id="request-prompt-preview">Chưa có request.</pre>
+              </details>
+              <div id="ai-questions" class="generated-list"></div>
+
+              <div class="history-panel">
+                <div class="result-header">
+                  <div>
+                    <p class="eyebrow">Đã lưu trong database</p>
+                    <h2>Lịch sử tạo câu hỏi</h2>
+                  </div>
+                  <button id="refresh-history-btn" class="secondary-btn" type="button">Tải lại</button>
+                </div>
+                <div id="ai-history-list" class="history-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="import-panel" class="panel">
+          <div class="import-layout">
+            <div class="upload-box">
+              <div>
+                <p class="eyebrow">Prompt mẫu</p>
+                <h2>Dùng với ChatGPT</h2>
+              </div>
+              <pre id="chatgpt-prompt" class="prompt-template">Hãy tạo bộ câu hỏi trắc nghiệm và chỉ trả về JSON hợp lệ, không markdown, không giải thích ngoài JSON.
+
+Schema bắt buộc:
+{
+  "subject": "Tên môn học",
+  "title": "Tên bộ câu hỏi",
+  "questions": [
+    {
+      "chapter": "Tên chương",
+      "topic": "Tên chủ đề",
+      "difficulty": "Dễ | Trung bình | Khó",
+      "questionType": "single | multiple | fill",
+      "prompt": "Nội dung câu hỏi",
+      "options": {
+        "A": "Lựa chọn A",
+        "B": "Lựa chọn B",
+        "C": "Lựa chọn C",
+        "D": "Lựa chọn D",
+        "E": "Lựa chọn E nếu có",
+        "F": "Lựa chọn F nếu có",
+        "G": "Lựa chọn G nếu có",
+        "H": "Lựa chọn H nếu có"
+      },
+      "answer": "A hoặc [\"A\", \"C\"] hoặc [\"đáp án text\"]",
+      "explanation": "Giải thích rõ vì sao đáp án đúng và vì sao các lựa chọn khác sai.",
+      "example": "Ví dụ cụ thể trong môn học.",
+      "tips": ["Mẹo 1", "Mẹo 2"],
+      "optionAnalysis": {
+        "A": "Phân tích lựa chọn A",
+        "B": "Phân tích lựa chọn B",
+        "C": "Phân tích lựa chọn C",
+        "D": "Phân tích lựa chọn D"
+      }
+    }
+  ]
+}
+
+Yêu cầu nội dung:
+- Tạo [SỐ_LƯỢNG] câu.
+- Môn: [TÊN_MÔN].
+- Chương/chủ đề: [CHƯƠNG_HOẶC_CHỦ_ĐỀ].
+- Phối hợp 3 loại câu khi phù hợp: single, multiple, fill.
+- Với single: answer là "A"; với multiple: answer là ["A","C"]; với fill: options là {} và answer là ["đáp án 1","đáp án tương đương"].
+- Câu trắc nghiệm có thể có 4-8 lựa chọn, dùng các khóa A-H.
+- Giải thích phải đủ rõ để người học hiểu ngay sau khi chọn đáp án.
+- Sắp xếp câu hỏi theo chapter rồi topic.</pre>
+              <button id="copy-prompt-btn" class="secondary-btn" type="button">Copy prompt</button>
+            </div>
+
+            <form id="import-form" class="upload-box">
+              <div>
+                <p class="eyebrow">Import JSON</p>
+                <h2>Dán câu hỏi đã tạo</h2>
+              </div>
+              <label class="check-row admin-only" hidden>
+                <input id="import-shared" name="shared" type="checkbox" value="true" checked>
+                <span>Share bộ câu hỏi này cho user</span>
+              </label>
+              <label>
+                <span>JSON câu hỏi</span>
+                <textarea id="import-json" rows="18" placeholder='{"subject":"...","title":"...","questions":[...]}'></textarea>
+              </label>
+              <div class="side-actions">
+                <button id="import-questions-btn" class="primary-btn" type="submit">Nạp vào luyện tập</button>
+                <button id="sample-import-btn" class="secondary-btn" type="button">Chèn mẫu</button>
+              </div>
+              <p id="import-message" class="form-message"></p>
+            </form>
+          </div>
+        </section>
+
+        <section id="settings-panel" class="panel">
+          <div class="settings-layout">
+            <section class="settings-card">
+              <div>
+                <p class="eyebrow">Tài khoản</p>
+                <h2>Thông tin đăng nhập</h2>
+              </div>
+              <div class="account-summary">
+                <div>
+                  <span>Username</span>
+                  <strong id="settings-username">-</strong>
+                </div>
+                <div>
+                  <span>Quyền</span>
+                  <strong id="settings-role">-</strong>
+                </div>
+                <div>
+                  <span>Ngày tạo</span>
+                  <strong id="settings-created">-</strong>
+                </div>
+              </div>
+            </section>
+
+            <form id="password-form" class="settings-card">
+              <div>
+                <p class="eyebrow">Bảo mật</p>
+                <h2>Đổi mật khẩu</h2>
+              </div>
+              <label>
+                <span>Mật khẩu hiện tại</span>
+                <input name="currentPassword" type="password" autocomplete="current-password" required>
+              </label>
+              <label>
+                <span>Mật khẩu mới</span>
+                <input name="newPassword" type="password" autocomplete="new-password" required>
+              </label>
+              <label>
+                <span>Nhập lại mật khẩu mới</span>
+                <input name="confirmPassword" type="password" autocomplete="new-password" required>
+              </label>
+              <button class="primary-btn" type="submit">Cập nhật mật khẩu</button>
+              <p id="password-message" class="form-message"></p>
+            </form>
+          </div>
+        </section>
+
+        <section id="admin-panel" class="panel">
+          <div class="admin-layout">
+            <form id="create-user-form" class="upload-box">
+              <div>
+                <p class="eyebrow">Quản trị tài khoản</p>
+                <h2>Tạo user mới</h2>
+              </div>
+              <label>
+                <span>Username</span>
+                <input id="new-username" name="username" type="text" autocomplete="off" required>
+              </label>
+              <label>
+                <span>Mật khẩu</span>
+                <input id="new-password" name="password" type="password" autocomplete="new-password" required>
+              </label>
+              <label>
+                <span>Quyền</span>
+                <select id="new-role" name="role">
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </label>
+              <button class="primary-btn" type="submit">Tạo tài khoản</button>
+              <p id="admin-message" class="form-message"></p>
+            </form>
+
+            <div class="ai-result">
+              <div class="result-header">
+                <div>
+                  <p class="eyebrow">Danh sách</p>
+                  <h2>Tài khoản hệ thống</h2>
+                </div>
+                <button id="refresh-users-btn" class="secondary-btn" type="button">Tải lại</button>
+              </div>
+              <div id="user-list" class="user-list"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
