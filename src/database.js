@@ -2,7 +2,10 @@ const { randomUUID } = require('crypto');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL_NON_POOLING;
 const pool = databaseUrl
   ? new Pool({
       connectionString: databaseUrl,
@@ -472,7 +475,9 @@ function normalizeUsername(username) {
 }
 
 function shouldUseSSL() {
-  return process.env.DATABASE_SSL === 'true' || process.env.PGSSLMODE === 'require';
+  return process.env.DATABASE_SSL === 'true' ||
+    process.env.PGSSLMODE === 'require' ||
+    /sslmode=require/i.test(databaseUrl || '');
 }
 
 function canAccessAIRun(run, user) {

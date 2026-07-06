@@ -104,6 +104,17 @@ OPENAI_MODEL=gpt-5.4
 OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
+Nếu dùng Supabase, có thể đặt trực tiếp biến Supabase tạo sẵn thay cho `DATABASE_URL`:
+
+```bash
+POSTGRES_URL=postgres://...pooler.supabase.com:6543/postgres?sslmode=require
+POSTGRES_PRISMA_URL=postgres://...pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true
+POSTGRES_URL_NON_POOLING=postgres://...supabase.com:5432/postgres?sslmode=require
+DATABASE_SSL=true
+```
+
+Ứng dụng sẽ ưu tiên theo thứ tự: `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`.
+
 Nếu database provider yêu cầu SSL, đặt thêm:
 
 ```bash

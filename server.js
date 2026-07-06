@@ -32,7 +32,7 @@ const app = express();
 const port = Number(process.env.PORT) || 3000;
 const rootDir = __dirname;
 const authCookieName = 'exam_auth';
-const authSecret = process.env.AUTH_SECRET || 'dev-auth-secret-change-me';
+const authSecret = process.env.AUTH_SECRET || process.env.SUPABASE_JWT_SECRET || 'dev-auth-secret-change-me';
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
