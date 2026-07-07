@@ -177,6 +177,37 @@
                   <button id="bookmark-btn" class="icon-btn" type="button" aria-label="Đánh dấu câu này">☆</button>
                 </div>
 
+                <div id="question-tools" class="question-tools" hidden>
+                  <div>
+                    <strong>Quản lý câu hỏi</strong>
+                    <span>Sửa nội dung, thêm câu mới hoặc xóa câu trong bộ đã lưu.</span>
+                  </div>
+                  <div class="question-tool-actions">
+                    <button id="edit-question-btn" class="secondary-btn" type="button">Sửa câu</button>
+                    <button id="add-question-btn" class="secondary-btn" type="button">Thêm câu</button>
+                    <button id="delete-question-btn" class="ghost-btn danger-btn" type="button">Xóa câu</button>
+                  </div>
+                </div>
+
+                <form id="question-editor" class="question-editor" hidden>
+                  <div class="question-editor-header">
+                    <div>
+                      <p class="eyebrow">JSON câu hỏi</p>
+                      <h3 id="question-editor-title">Chỉnh sửa câu hỏi</h3>
+                    </div>
+                    <button id="cancel-question-edit-btn" class="ghost-btn" type="button">Đóng</button>
+                  </div>
+                  <label>
+                    <span>Nội dung JSON</span>
+                    <textarea id="question-editor-json" rows="14" spellcheck="false"></textarea>
+                  </label>
+                  <div class="side-actions">
+                    <button id="save-question-btn" class="primary-btn" type="submit">Lưu câu hỏi</button>
+                    <button id="cancel-question-edit-secondary-btn" class="secondary-btn" type="button">Hủy</button>
+                  </div>
+                  <p id="question-editor-message" class="form-message"></p>
+                </form>
+
                 <div id="options" class="options"></div>
 
                 <div id="answer-panel" class="answer-panel" hidden>
@@ -534,6 +565,7 @@ Yêu cầu nội dung:
                 <span>Quyền</span>
                 <select id="new-role" name="role">
                   <option value="user">User</option>
+                  <option value="editor">Editor</option>
                   <option value="admin">Admin</option>
                 </select>
               </label>

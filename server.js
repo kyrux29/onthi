@@ -10,9 +10,11 @@ const { compactText, extractTextFromFile } = require('./src/documentText');
 const { generateQuestionsWithAI } = require('./src/aiGenerator');
 const { parseImportedQuestionSet } = require('./src/importParser');
 const {
+  addAIRunQuestion,
   closeDatabase,
   changeUserPassword,
   createUser,
+  deleteAIRunQuestion,
   ensureDatabaseReady,
   findUserById,
   findUserByUsername,
@@ -28,7 +30,9 @@ const {
   listUsers,
   saveAIRun,
   saveProgress,
-  setAIRunShared
+  setAIRunShared,
+  updateAIRunQuestion,
+  updateUserRole
 } = require('./src/database');
 
 const app = express();
@@ -111,6 +115,29 @@ app.post('/api/admin/users', requireAdmin, async (req, res, next) => {
   }
 });
 
+app.patch('/api/admin/users/:id/role', requireAdmin, async (req, res, next) => {
+  try {
+    if (req.params.id === req.user.id) {
+      res.status(400).json({ error: 'Không thể đổi quyền của tài khoản đang đăng nhập.' });
+      return;
+    }
+
+    const user = await updateUserRole({
+      userId: req.params.id,
+      role: req.body.role
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+      return;
+    }
+
+    res.json({ user });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.put('/api/account/password', async (req, res, next) => {
   try {
     await changeUserPassword({
@@ -167,7 +194,8 @@ app.get('/api/questions', async (req, res, next) => {
           path: `database:${runId}`,
           source: 'database',
           shared: Boolean(run.shared),
-          ownerUserId: run.ownerUserId
+          ownerUserId: run.ownerUserId,
+          runId
         },
         chapters,
         topics,
@@ -193,6 +221,48 @@ app.get('/api/questions', async (req, res, next) => {
       topics,
       questions
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/question-banks/:id/questions', requireQuestionEditor, async (req, res, next) => {
+  try {
+    const question = parseQuestionPayload(req.body);
+    const result = await addAIRunQuestion({
+      id: req.params.id,
+      question,
+      user: req.user
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/question-banks/:id/questions/:number', requireQuestionEditor, async (req, res, next) => {
+  try {
+    const question = parseQuestionPayload(req.body);
+    const result = await updateAIRunQuestion({
+      id: req.params.id,
+      questionNumber: req.params.number,
+      question,
+      user: req.user
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/question-banks/:id/questions/:number', requireQuestionEditor, async (req, res, next) => {
+  try {
+    const result = await deleteAIRunQuestion({
+      id: req.params.id,
+      questionNumber: req.params.number,
+      user: req.user
+    });
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -437,6 +507,23 @@ function requireAdmin(req, res, next) {
     return;
   }
   next();
+}
+
+function requireQuestionEditor(req, res, next) {
+  if (!['admin', 'editor'].includes(req.user?.role)) {
+    res.status(403).json({ error: 'Chỉ admin hoặc editor mới được chỉnh sửa câu hỏi.' });
+    return;
+  }
+  next();
+}
+
+function parseQuestionPayload(body = {}) {
+  const question = body.question || body;
+  return parseImportedQuestionSet({
+    subject: question.subject || body.subject || 'Môn học import',
+    title: body.title || question.source || 'Câu hỏi chỉnh sửa',
+    questions: [question]
+  }).questions[0];
 }
 
 function resolveAIKeyForRequest(req) {

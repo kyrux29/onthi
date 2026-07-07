@@ -9,6 +9,7 @@ const databaseUrl = process.env.DATABASE_URL ||
 const pool = databaseUrl
   ? new Pool(buildPoolConfig(databaseUrl))
   : null;
+const allowedRoles = new Set(['admin', 'editor', 'user']);
 let ready = false;
 let initializing = null;
 let lastInitError = null;
@@ -67,7 +68,7 @@ async function initializeDatabase() {
       id text primary key,
       username text not null unique,
       password_hash text not null,
-      role text not null default 'user' check (role in ('admin', 'user')),
+      role text not null default 'user' check (role in ('admin', 'editor', 'user')),
       created_at timestamptz not null default now()
     );
 
@@ -78,6 +79,7 @@ async function initializeDatabase() {
     );
   `);
 
+  await migrateUserRoles();
   await ensureDefaultAdmin();
   await migrateAIRunOwnership();
   ready = true;
@@ -408,6 +410,103 @@ async function setAIRunShared(id, shared) {
   return rows[0] || null;
 }
 
+async function addAIRunQuestion({ id, question, user }) {
+  requireDatabase();
+  const run = await getAIRunForQuestionMutation(id, user);
+  const questions = normalizeQuestionArray(run.questions);
+  const nextQuestion = normalizeQuestionForStorage(question, questions.length, null);
+  questions.push(nextQuestion);
+
+  await saveAIRunQuestions(run.id, questions);
+  return {
+    question: nextQuestion,
+    total: questions.length
+  };
+}
+
+async function updateAIRunQuestion({ id, questionNumber, question, user }) {
+  requireDatabase();
+  const run = await getAIRunForQuestionMutation(id, user);
+  const questions = normalizeQuestionArray(run.questions);
+  const index = Number(questionNumber) - 1;
+
+  if (!Number.isInteger(index) || index < 0 || index >= questions.length) {
+    const error = new Error('Số câu hỏi không hợp lệ.');
+    error.status = 400;
+    throw error;
+  }
+
+  const nextQuestion = normalizeQuestionForStorage(question, index, questions[index]);
+  questions[index] = nextQuestion;
+  await saveAIRunQuestions(run.id, questions);
+
+  return {
+    question: nextQuestion,
+    total: questions.length
+  };
+}
+
+async function deleteAIRunQuestion({ id, questionNumber, user }) {
+  requireDatabase();
+  const run = await getAIRunForQuestionMutation(id, user);
+  const questions = normalizeQuestionArray(run.questions);
+  const index = Number(questionNumber) - 1;
+
+  if (!Number.isInteger(index) || index < 0 || index >= questions.length) {
+    const error = new Error('Số câu hỏi không hợp lệ.');
+    error.status = 400;
+    throw error;
+  }
+
+  const [removed] = questions.splice(index, 1);
+  const renumbered = questions.map((question, questionIndex) => normalizeQuestionForStorage(question, questionIndex, question));
+  await saveAIRunQuestions(run.id, renumbered);
+
+  return {
+    removed,
+    total: renumbered.length
+  };
+}
+
+async function getAIRunForQuestionMutation(id, user) {
+  const runId = normalizeRunId(id);
+  const { rows } = await pool.query(
+    `select
+      id,
+      questions,
+      owner_user_id as "ownerUserId",
+      shared
+    from ai_runs
+    where id = $1`,
+    [runId]
+  );
+
+  const run = rows[0];
+  if (!run) {
+    const error = new Error('Không tìm thấy bộ câu hỏi.');
+    error.status = 404;
+    throw error;
+  }
+
+  if (!canManageAIRunQuestions(run, user)) {
+    const error = new Error('Bạn không có quyền chỉnh sửa bộ câu hỏi này.');
+    error.status = 403;
+    throw error;
+  }
+
+  return run;
+}
+
+async function saveAIRunQuestions(id, questions) {
+  await pool.query(
+    `update ai_runs
+     set questions = $2::jsonb,
+         count_requested = $3
+     where id = $1`,
+    [id, JSON.stringify(questions), questions.length]
+  );
+}
+
 async function ensureDefaultAdmin() {
   const { rows } = await pool.query('select id from users where username = $1 limit 1', ['kyrux']);
   if (rows[0]) return;
@@ -438,10 +537,24 @@ async function migrateAIRunOwnership() {
   );
 }
 
+async function migrateUserRoles() {
+  await pool.query(`
+    do $$
+    begin
+      alter table users drop constraint if exists users_role_check;
+      begin
+        alter table users add constraint users_role_check check (role in ('admin', 'editor', 'user'));
+      exception when duplicate_object then
+        null;
+      end;
+    end $$;
+  `);
+}
+
 async function createUser({ username, password, role = 'user' }) {
   requireDatabase({ allowDuringInit: true });
   const normalizedUsername = normalizeUsername(username);
-  const normalizedRole = role === 'admin' ? 'admin' : 'user';
+  const normalizedRole = normalizeUserRole(role);
 
   if (!normalizedUsername) {
     const error = new Error('Username không hợp lệ.');
@@ -474,6 +587,19 @@ async function createUser({ username, password, role = 'user' }) {
     }
     throw error;
   }
+}
+
+async function updateUserRole({ userId, role }) {
+  requireDatabase();
+  const normalizedRole = normalizeUserRole(role);
+  const { rows } = await pool.query(
+    `update users
+     set role = $2
+     where id = $1
+     returning id, username, role, created_at as "createdAt"`,
+    [userId, normalizedRole]
+  );
+  return rows[0] || null;
 }
 
 async function findUserByUsername(username) {
@@ -557,6 +683,16 @@ function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
 
+function normalizeUserRole(role) {
+  const normalized = String(role || 'user').trim().toLowerCase();
+  if (!allowedRoles.has(normalized)) {
+    const error = new Error('Quyền tài khoản không hợp lệ.');
+    error.status = 400;
+    throw error;
+  }
+  return normalized;
+}
+
 function shouldUseSSL() {
   return process.env.DATABASE_SSL === 'true' ||
     process.env.PGSSLMODE === 'require' ||
@@ -587,6 +723,28 @@ function canAccessAIRun(run, user) {
   return user?.role === 'admin' || run.shared || run.ownerUserId === user?.id;
 }
 
+function canManageAIRunQuestions(run, user) {
+  if (user?.role === 'admin') return true;
+  if (user?.role !== 'editor') return false;
+  return run.shared || run.ownerUserId === user.id;
+}
+
+function normalizeRunId(id) {
+  return String(id || '').replace(/^run:/, '');
+}
+
+function normalizeQuestionArray(questions) {
+  return Array.isArray(questions) ? questions : [];
+}
+
+function normalizeQuestionForStorage(question, index, existing) {
+  return {
+    ...question,
+    id: existing?.id || question.id || `question-${Date.now()}-${index + 1}`,
+    number: index + 1
+  };
+}
+
 function requireDatabase(options = {}) {
   if (!pool) {
     const error = new Error('Database chưa được cấu hình. Hãy chạy bằng Docker Compose hoặc đặt DATABASE_URL.');
@@ -606,9 +764,11 @@ async function closeDatabase() {
 }
 
 module.exports = {
+  addAIRunQuestion,
   closeDatabase,
   changeUserPassword,
   createUser,
+  deleteAIRunQuestion,
   ensureDatabaseReady,
   findUserById,
   findUserByUsername,
@@ -624,5 +784,7 @@ module.exports = {
   listAIRuns,
   saveAIRun,
   saveProgress,
-  setAIRunShared
+  setAIRunShared,
+  updateAIRunQuestion,
+  updateUserRole
 };

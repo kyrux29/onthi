@@ -14,7 +14,9 @@ const state = {
   currentUser: null,
   appStarted: false,
   progressSyncTimer: null,
-  studyTimer: null
+  studyTimer: null,
+  questionEditMode: null,
+  questionEditTargetId: null
 };
 
 const els = {
@@ -67,6 +69,16 @@ const els = {
   questionPosition: document.querySelector('#question-position'),
   questionTitle: document.querySelector('#question-title'),
   bookmark: document.querySelector('#bookmark-btn'),
+  questionTools: document.querySelector('#question-tools'),
+  editQuestion: document.querySelector('#edit-question-btn'),
+  addQuestion: document.querySelector('#add-question-btn'),
+  deleteQuestion: document.querySelector('#delete-question-btn'),
+  questionEditor: document.querySelector('#question-editor'),
+  questionEditorTitle: document.querySelector('#question-editor-title'),
+  questionEditorJson: document.querySelector('#question-editor-json'),
+  questionEditorMessage: document.querySelector('#question-editor-message'),
+  cancelQuestionEdit: document.querySelector('#cancel-question-edit-btn'),
+  cancelQuestionEditSecondary: document.querySelector('#cancel-question-edit-secondary-btn'),
   options: document.querySelector('#options'),
   answerPanel: document.querySelector('#answer-panel'),
   answerBanner: document.querySelector('#answer-banner'),
@@ -183,6 +195,12 @@ function bindEvents() {
     const answer = state.progress.answers[question.id];
     return answer && !answer.correct;
   }));
+  els.editQuestion.addEventListener('click', () => openQuestionEditor('edit'));
+  els.addQuestion.addEventListener('click', () => openQuestionEditor('add'));
+  els.deleteQuestion.addEventListener('click', deleteCurrentQuestion);
+  els.questionEditor.addEventListener('submit', saveQuestionEdit);
+  els.cancelQuestionEdit.addEventListener('click', closeQuestionEditor);
+  els.cancelQuestionEditSecondary.addEventListener('click', closeQuestionEditor);
   els.refreshRanking.addEventListener('click', loadRanking);
   els.userStatus.addEventListener('click', () => activatePanel('settings-panel'));
   els.bookmark.addEventListener('click', toggleBookmark);
@@ -277,9 +295,9 @@ function showAppShell() {
 }
 
 function renderUserChrome() {
-  els.userStatus.textContent = `${state.currentUser.username} · ${state.currentUser.role}`;
+  els.userStatus.textContent = `${state.currentUser.username} · ${roleLabel(state.currentUser.role)}`;
   els.settingsUsername.textContent = state.currentUser.username;
-  els.settingsRole.textContent = state.currentUser.role;
+  els.settingsRole.textContent = roleLabel(state.currentUser.role);
   els.settingsCreated.textContent = state.currentUser.createdAt
     ? new Date(state.currentUser.createdAt).toLocaleString('vi-VN')
     : '-';
@@ -378,14 +396,48 @@ function renderUsers(users) {
   for (const user of users) {
     const item = document.createElement('article');
     item.className = 'user-item';
+    const isSelf = user.id === state.currentUser?.id;
     item.innerHTML = `
       <div>
         <strong>${escapeHtml(user.username)}</strong>
-        <span>${new Date(user.createdAt).toLocaleString('vi-VN')}</span>
+        <span>${new Date(user.createdAt).toLocaleString('vi-VN')}${isSelf ? ' · bạn' : ''}</span>
       </div>
-      <b class="role-badge ${user.role === 'admin' ? 'admin' : ''}">${escapeHtml(user.role)}</b>
+      <div class="user-role-control">
+        <b class="role-badge ${roleClass(user.role)}">${escapeHtml(roleLabel(user.role))}</b>
+        <select class="role-select" data-user-id="${escapeHtml(user.id)}" ${isSelf ? 'disabled' : ''} aria-label="Đổi quyền ${escapeHtml(user.username)}">
+          ${roleOptions(user.role)}
+        </select>
+      </div>
     `;
+    item.querySelector('.role-select')?.addEventListener('change', (event) => {
+      changeUserRole(user.id, event.target.value, user.role, event.target);
+    });
     els.userList.appendChild(item);
+  }
+}
+
+async function changeUserRole(userId, role, previousRole, select) {
+  if (state.currentUser?.role !== 'admin') return;
+  select.disabled = true;
+  els.adminMessage.textContent = 'Đang cập nhật quyền...';
+  els.adminMessage.classList.remove('error');
+
+  try {
+    const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Không đổi được quyền tài khoản.');
+
+    els.adminMessage.textContent = `Đã cập nhật ${data.user.username} thành ${roleLabel(data.user.role)}.`;
+    await loadUsers();
+  } catch (error) {
+    select.value = previousRole;
+    select.disabled = false;
+    els.adminMessage.textContent = error.message;
+    els.adminMessage.classList.add('error');
   }
 }
 
@@ -420,7 +472,7 @@ function renderRanking() {
       <strong class="ranking-rank">#${user.rank}</strong>
       <div class="ranking-user">
         <strong>${escapeHtml(user.username)}</strong>
-        <span>${escapeHtml(user.role)}${user.id === state.currentUser?.id ? ' · bạn' : ''}</span>
+        <span>${escapeHtml(roleLabel(user.role))}${user.id === state.currentUser?.id ? ' · bạn' : ''}</span>
       </div>
       <div><span>Đúng</span><strong>${user.correct}</strong></div>
       <div><span>Đã làm</span><strong>${user.done}</strong></div>
@@ -432,6 +484,7 @@ function renderRanking() {
 }
 
 async function loadSubjects() {
+  const previousBankId = state.activeBankId;
   const response = await fetch('/api/subjects');
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Không tải được danh sách môn.');
@@ -441,9 +494,9 @@ async function loadSubjects() {
   renderBankCards();
   renderHome();
 
-  const first = state.banks[0];
-  if (first) {
-    await selectBank(first.id);
+  const nextBank = state.banks.find((bank) => bank.id === previousBankId) || state.banks[0];
+  if (nextBank) {
+    await selectBank(nextBank.id);
   }
 }
 
@@ -649,6 +702,7 @@ function renderQuestion() {
     els.questionTitle.textContent = 'Không tìm thấy câu hỏi theo bộ lọc hiện tại.';
     els.answerPanel.hidden = true;
     els.bookmark.classList.remove('active');
+    renderQuestionTools(null);
     return;
   }
 
@@ -660,6 +714,7 @@ function renderQuestion() {
   els.questionTitle.textContent = `${question.generated ? 'AI' : `Câu ${String(question.number).padStart(3, '0')}`}. ${question.prompt}`;
   els.bookmark.classList.toggle('active', state.progress.bookmarks.includes(question.id));
   els.bookmark.textContent = state.progress.bookmarks.includes(question.id) ? '★' : '☆';
+  renderQuestionTools(question);
 
   if (getQuestionType(question) === 'fill') {
     renderFillAnswer(question, saved);
@@ -676,6 +731,193 @@ function renderQuestion() {
   }
 
   renderList();
+}
+
+function renderQuestionTools(question) {
+  if (!els.questionTools) return;
+  const canManage = Boolean(question) && canManageCurrentBank();
+  els.questionTools.hidden = !canManage;
+
+  if (!canManage) {
+    closeQuestionEditor();
+    return;
+  }
+
+  els.editQuestion.disabled = !question;
+  els.deleteQuestion.disabled = !question;
+  if (state.questionEditMode === 'edit' && state.questionEditTargetId !== question.id) {
+    closeQuestionEditor();
+  }
+}
+
+function canManageCurrentBank() {
+  return state.activeBank?.source === 'database' &&
+    ['admin', 'editor'].includes(state.currentUser?.role);
+}
+
+function openQuestionEditor(mode) {
+  if (!canManageCurrentBank()) return;
+  const question = state.filtered[state.currentIndex];
+  if (mode === 'edit' && !question) return;
+
+  state.questionEditMode = mode;
+  state.questionEditTargetId = mode === 'edit' ? question.id : null;
+  els.questionEditor.hidden = false;
+  els.questionEditorTitle.textContent = mode === 'add' ? 'Thêm câu hỏi mới' : `Chỉnh sửa câu ${question.number}`;
+  els.questionEditorJson.value = JSON.stringify(
+    mode === 'add' ? buildQuestionTemplate(question) : serializeQuestionForEdit(question),
+    null,
+    2
+  );
+  els.questionEditorMessage.textContent = mode === 'add'
+    ? 'Tạo câu theo đúng schema. Câu fill vẫn phải có explanation, example và tips.'
+    : 'Chỉnh JSON rồi lưu. Hệ thống sẽ kiểm tra prompt, đáp án và giải thích trước khi ghi database.';
+  els.questionEditorMessage.classList.remove('error');
+  els.questionEditor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function closeQuestionEditor() {
+  if (!els.questionEditor) return;
+  state.questionEditMode = null;
+  state.questionEditTargetId = null;
+  els.questionEditor.hidden = true;
+  els.questionEditorMessage.textContent = '';
+  els.questionEditorMessage.classList.remove('error');
+}
+
+async function saveQuestionEdit(event) {
+  event.preventDefault();
+  if (!canManageCurrentBank()) return;
+
+  let question;
+  try {
+    question = JSON.parse(els.questionEditorJson.value);
+    if (!question || Array.isArray(question) || typeof question !== 'object') {
+      throw new Error('JSON phải là một object câu hỏi, không phải mảng.');
+    }
+  } catch (error) {
+    els.questionEditorMessage.textContent = `JSON không hợp lệ: ${error.message}`;
+    els.questionEditorMessage.classList.add('error');
+    return;
+  }
+
+  const mode = state.questionEditMode;
+  const currentQuestion = state.filtered[state.currentIndex];
+  const runId = getActiveRunId();
+  const endpoint = mode === 'add'
+    ? `/api/question-banks/${encodeURIComponent(runId)}/questions`
+    : `/api/question-banks/${encodeURIComponent(runId)}/questions/${encodeURIComponent(currentQuestion.number)}`;
+  const method = mode === 'add' ? 'POST' : 'PUT';
+  const previousBankId = state.activeBankId;
+  const targetIndex = mode === 'add' ? state.baseQuestions.length : state.currentIndex;
+
+  els.questionEditorMessage.textContent = 'Đang lưu câu hỏi...';
+  els.questionEditorMessage.classList.remove('error');
+
+  try {
+    const response = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Không lưu được câu hỏi.');
+
+    closeQuestionEditor();
+    await loadSubjects();
+    if (state.activeBankId === previousBankId) {
+      state.currentIndex = Math.min(Math.max(targetIndex, 0), Math.max(state.filtered.length - 1, 0));
+      applyFilters();
+    }
+  } catch (error) {
+    els.questionEditorMessage.textContent = error.message;
+    els.questionEditorMessage.classList.add('error');
+  }
+}
+
+async function deleteCurrentQuestion() {
+  if (!canManageCurrentBank()) return;
+  const question = state.filtered[state.currentIndex];
+  if (!question) return;
+
+  const confirmed = window.confirm(`Xóa câu ${question.number}? Thao tác này sẽ xóa khỏi bộ câu hỏi đang lưu trong database.`);
+  if (!confirmed) return;
+
+  const previousBankId = state.activeBankId;
+  const nextIndex = Math.max(0, state.currentIndex - (state.currentIndex === state.filtered.length - 1 ? 1 : 0));
+
+  try {
+    const response = await fetch(
+      `/api/question-banks/${encodeURIComponent(getActiveRunId())}/questions/${encodeURIComponent(question.number)}`,
+      { method: 'DELETE' }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Không xóa được câu hỏi.');
+
+    delete state.progress.answers[question.id];
+    state.progress.bookmarks = state.progress.bookmarks.filter((id) => id !== question.id);
+    saveProgress();
+    closeQuestionEditor();
+    await loadSubjects();
+    if (state.activeBankId === previousBankId) {
+      state.currentIndex = Math.min(nextIndex, Math.max(state.filtered.length - 1, 0));
+      applyFilters();
+    }
+  } catch (error) {
+    els.questionEditor.hidden = false;
+    els.questionEditorTitle.textContent = 'Không xóa được câu hỏi';
+    els.questionEditorJson.value = JSON.stringify(serializeQuestionForEdit(question), null, 2);
+    els.questionEditorMessage.textContent = error.message;
+    els.questionEditorMessage.classList.add('error');
+  }
+}
+
+function getActiveRunId() {
+  return state.activeBank?.runId || String(state.activeBankId || '').replace(/^run:/, '');
+}
+
+function serializeQuestionForEdit(question) {
+  return {
+    subject: question.subject || state.activeBank?.subject || '',
+    chapter: question.chapter || '',
+    topic: question.topic || '',
+    difficulty: question.difficulty || 'Trung bình',
+    questionType: getQuestionType(question),
+    prompt: question.prompt || '',
+    options: question.options || {},
+    answer: question.answer,
+    explanation: question.explanation || '',
+    example: question.example || '',
+    tips: Array.isArray(question.tips) ? question.tips : [],
+    optionAnalysis: question.optionAnalysis || {}
+  };
+}
+
+function buildQuestionTemplate(referenceQuestion) {
+  return {
+    subject: referenceQuestion?.subject || state.activeBank?.subject || 'Tên môn học',
+    chapter: referenceQuestion?.chapter || 'Tên chương',
+    topic: referenceQuestion?.topic || 'Tên chủ đề',
+    difficulty: 'Trung bình',
+    questionType: 'single',
+    prompt: 'Nội dung câu hỏi mới?',
+    options: {
+      A: 'Lựa chọn A',
+      B: 'Lựa chọn B',
+      C: 'Lựa chọn C',
+      D: 'Lựa chọn D'
+    },
+    answer: 'A',
+    explanation: 'Giải thích rõ vì sao đáp án đúng và vì sao các lựa chọn khác sai.',
+    example: 'Ví dụ cụ thể trong môn học.',
+    tips: ['Mẹo nhận dạng nhanh dạng bài này.', 'Mẹo loại trừ phương án nhiễu.'],
+    optionAnalysis: {
+      A: 'Đáp án đúng theo khái niệm hoặc công thức.',
+      B: 'Phương án nhiễu, sai ở điểm...',
+      C: 'Phương án nhiễu, dễ nhầm với...',
+      D: 'Phương án nhiễu, không phù hợp ngữ cảnh câu hỏi.'
+    }
+  };
 }
 
 function renderSingleChoice(question, saved) {
@@ -1433,4 +1675,24 @@ function normalizeProgress(progress) {
     bookmarks: Array.isArray(progress?.bookmarks) ? progress.bookmarks : [],
     studySeconds: Math.max(0, Number.parseInt(progress?.studySeconds, 10) || 0)
   };
+}
+
+function roleLabel(role) {
+  return {
+    admin: 'Admin',
+    editor: 'Editor',
+    user: 'User'
+  }[role] || role || 'User';
+}
+
+function roleClass(role) {
+  if (role === 'admin') return 'admin';
+  if (role === 'editor') return 'editor';
+  return '';
+}
+
+function roleOptions(activeRole) {
+  return ['user', 'editor', 'admin']
+    .map((role) => `<option value="${role}" ${role === activeRole ? 'selected' : ''}>${roleLabel(role)}</option>`)
+    .join('');
 }
