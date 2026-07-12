@@ -251,7 +251,7 @@ li {
 
 .app-shell[data-active-panel="practice-panel"] .sidebar {
   position: fixed;
-  inset: 0 auto 0 0;
+  inset: 0 0 0 auto;
   z-index: 60;
   display: flex;
   flex-direction: column;
@@ -260,11 +260,11 @@ li {
   height: 100dvh;
   padding: 18px;
   overflow-y: auto;
-  border-right: 1px solid var(--line-strong);
+  border-left: 1px solid var(--line-strong);
   background: #f8faf9;
   box-shadow: var(--shadow-md);
   scrollbar-width: thin;
-  transform: translateX(-104%);
+  transform: translateX(104%);
   transition: transform 180ms ease;
   overscroll-behavior: contain;
 }
@@ -309,8 +309,7 @@ li {
 }
 
 .app-shell[data-active-panel="practice-panel"] .filter-toggle-btn {
-  display: inline-flex;
-  align-items: center;
+  display: none;
 }
 
 .app-shell:not([data-active-panel="ai-panel"]) .ai-status {
@@ -934,16 +933,30 @@ textarea {
 }
 
 /* Question bank selection */
-.subject-landing {
-  display: grid;
-  gap: 16px;
-  width: min(1180px, 100%);
-  margin: 0 auto 18px;
-  padding: 0 0 18px;
-  border-bottom: 1px solid var(--line);
+.bank-chooser-dialog {
+  width: min(940px, calc(100% - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(18, 34, 29, 0.24);
 }
 
-.subject-landing h2 {
+.bank-chooser-dialog::backdrop {
+  background: rgba(20, 35, 31, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.bank-chooser-dialog-content {
+  display: grid;
+  gap: 20px;
+  padding: 28px;
+}
+
+.bank-chooser-dialog h2 {
   margin: 0;
   font-family: "Aptos Display", "Trebuchet MS", sans-serif;
   font-size: 1.45rem;
@@ -956,6 +969,10 @@ textarea {
   gap: 18px;
 }
 
+.bank-chooser-dialog .subject-landing-header {
+  align-items: flex-start;
+}
+
 .subject-landing-header > div {
   min-width: 0;
 }
@@ -966,29 +983,12 @@ textarea {
   font-size: 0.84rem;
 }
 
-.subject-landing.collapsed {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-  margin-bottom: 12px;
-  padding: 2px 0 12px;
-}
-
-.subject-landing.collapsed .subject-landing-header {
-  align-items: center;
-}
-
-.subject-landing.collapsed .eyebrow,
-.subject-landing.collapsed #bank-chooser-note {
-  display: none;
-}
-
-.subject-landing.collapsed #bank-chooser-title {
-  max-width: 760px;
-  overflow: hidden;
-  font-size: 1rem;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+#close-bank-chooser-btn {
+  flex-basis: 36px;
+  width: 36px;
+  min-height: 36px;
+  border-color: transparent;
+  color: var(--muted);
 }
 
 .bank-cards {
@@ -1063,10 +1063,10 @@ textarea {
 /* Practice */
 .practice-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 252px;
+  grid-template-columns: minmax(0, 1fr) 292px;
   align-items: start;
-  gap: 24px;
-  width: min(1180px, 100%);
+  gap: 20px;
+  width: min(1240px, 100%);
   margin: 0 auto;
 }
 
@@ -1195,6 +1195,7 @@ textarea {
   position: sticky;
   top: calc(var(--topbar-height) + 10px);
   display: grid;
+  grid-template-rows: auto auto auto auto auto minmax(90px, 1fr) auto;
   gap: 11px;
   max-height: calc(100vh - var(--topbar-height) - 28px);
   min-width: 0;
@@ -1203,6 +1204,50 @@ textarea {
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: none;
+  overflow: hidden;
+}
+
+.practice-context {
+  display: grid;
+  gap: 11px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.practice-context > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.practice-context > div:first-child span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.practice-context > div:first-child strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--forest);
+  font-size: 0.86rem;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.practice-context-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.practice-context-actions button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 9px;
+  font-size: 0.76rem;
 }
 
 .practice-tools-header {
@@ -1216,6 +1261,26 @@ textarea {
 .practice-tools-header h2 {
   margin: 0;
   font-size: 1rem;
+}
+
+.bank-score {
+  display: grid;
+  justify-items: end;
+  line-height: 1.15;
+}
+
+.bank-score span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.bank-score strong {
+  color: var(--forest);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .question-legend {
@@ -1869,6 +1934,259 @@ textarea {
   width: 100%;
 }
 
+/* Completion */
+.completion-dialog {
+  width: min(440px, calc(100% - 32px));
+  max-height: min(680px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(18, 34, 29, 0.24);
+}
+
+.completion-dialog::backdrop,
+.attempt-history-dialog::backdrop {
+  background: rgba(20, 35, 31, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.completion-dialog-content {
+  position: relative;
+  display: grid;
+  gap: 0;
+  padding: 28px;
+}
+
+.completion-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  min-height: 34px;
+  width: 34px;
+  flex-basis: 34px;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.completion-dialog h2 {
+  margin: 0;
+  padding-right: 38px;
+  font-family: "Aptos Display", "Trebuchet MS", sans-serif;
+  font-size: 1.35rem;
+}
+
+.completion-bank-name {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.completion-score {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 24px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.completion-score strong {
+  color: var(--forest);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.completion-score span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.completion-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  padding: 18px 0 22px;
+}
+
+.completion-breakdown div {
+  display: grid;
+  gap: 3px;
+}
+
+.completion-breakdown span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.completion-breakdown strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.completion-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.completion-actions button {
+  min-width: 0;
+}
+
+.attempt-history-dialog {
+  width: min(620px, calc(100% - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(18, 34, 29, 0.24);
+}
+
+.attempt-history-dialog-content {
+  position: relative;
+  display: grid;
+  padding: 28px;
+}
+
+.attempt-history-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  min-height: 34px;
+  width: 34px;
+  flex-basis: 34px;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.attempt-history-dialog h2 {
+  margin: 0;
+  padding-right: 38px;
+  font-family: "Aptos Display", "Trebuchet MS", sans-serif;
+  font-size: 1.35rem;
+}
+
+.attempt-history-bank-name {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.current-attempt-summary {
+  margin-top: 20px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--forest);
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.attempt-history-list {
+  display: grid;
+  max-height: min(480px, 55dvh);
+  margin-top: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #a8b8af transparent;
+}
+
+.attempt-history-item {
+  display: grid;
+  gap: 13px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.attempt-history-item:first-child {
+  border-top: 0;
+}
+
+.attempt-history-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.attempt-history-item-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.attempt-history-item-header strong {
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.attempt-history-item-header time {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.attempt-status {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid #e2c58e;
+  border-radius: 4px;
+  background: var(--ochre-soft);
+  color: #795019;
+  font-size: 0.68rem;
+  font-weight: 760;
+}
+
+.attempt-status.complete {
+  border-color: #abd0b8;
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.attempt-history-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.attempt-history-metrics div {
+  display: grid;
+  gap: 2px;
+}
+
+.attempt-history-metrics span {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.attempt-history-metrics strong {
+  color: var(--forest);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.attempt-history-empty {
+  margin: 20px 0 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
 /* Ranking */
 .ranking-layout {
   max-width: 1120px;
@@ -2321,6 +2639,11 @@ textarea {
 }
 
 @media (max-width: 920px) {
+  .app-shell[data-active-panel="practice-panel"] .filter-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+  }
+
   .practice-workspace,
   .ai-layout,
   .import-layout,
@@ -2353,7 +2676,9 @@ textarea {
   .practice-tools,
   .upload-box {
     position: static;
+    grid-template-rows: none;
     max-height: none;
+    overflow: visible;
   }
 
   .question-list {
@@ -2503,31 +2828,15 @@ textarea {
     padding: 20px;
   }
 
-  .subject-landing {
-    padding-bottom: 14px;
+  .bank-chooser-dialog-content {
+    padding: 20px;
   }
 
-  .subject-landing-header {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .subject-landing.collapsed .subject-landing-header {
+  .bank-chooser-dialog .subject-landing-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-  }
-
-  .subject-landing.collapsed #bank-chooser-title {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .subject-landing-header .secondary-btn {
-    width: max-content;
+    align-items: start;
+    gap: 12px;
   }
 
   .bank-cards {
@@ -2769,6 +3078,27 @@ textarea {
 
   .quick-jump {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .completion-dialog-content,
+  .attempt-history-dialog-content {
+    padding: 22px;
+  }
+
+  .bank-chooser-dialog-content {
+    padding: 16px;
+  }
+
+  .completion-score strong {
+    font-size: 1.75rem;
+  }
+
+  .completion-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .attempt-history-metrics {
+    gap: 8px;
   }
 
   .chart-bar-row {

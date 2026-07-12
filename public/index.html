@@ -48,7 +48,7 @@
     <div class="app-shell" data-active-panel="home-panel" hidden>
       <aside id="practice-filters" class="sidebar" aria-label="Bộ lọc luyện tập">
         <div class="sidebar-drawer-head">
-          <strong>Bộ lọc luyện tập</strong>
+          <strong>Tùy chọn luyện tập</strong>
           <button id="filter-close-btn" class="ghost-btn" type="button">Đóng</button>
         </div>
         <div class="brand">
@@ -129,7 +129,7 @@
               </span>
             </button>
             <div class="topbar-actions">
-              <button id="filter-toggle-btn" class="secondary-btn filter-toggle-btn" type="button" aria-expanded="false" aria-controls="practice-filters">Bộ lọc</button>
+              <button id="filter-toggle-btn" class="secondary-btn filter-toggle-btn" type="button" aria-expanded="false" aria-controls="practice-filters">Tùy chọn</button>
               <div class="ai-status" id="ai-status" aria-live="polite">AI: đang kiểm tra…</div>
               <button class="user-pill" id="user-status" type="button" title="Mở cài đặt tài khoản"></button>
               <button id="logout-btn" class="ghost-btn" type="button">Thoát</button>
@@ -175,17 +175,19 @@
         </section>
 
         <section id="practice-panel" class="panel" role="tabpanel" aria-labelledby="tab-practice">
-          <div id="subject-landing" class="subject-landing">
-            <div class="subject-landing-header">
-              <div>
-                <p class="eyebrow">Bộ câu hỏi</p>
-                <h2 id="bank-chooser-title">Chọn môn hoặc bộ câu hỏi</h2>
-                <p id="bank-chooser-note">Chọn một bộ để bắt đầu hoặc tiếp tục tiến độ đã lưu.</p>
+          <dialog id="subject-landing" class="bank-chooser-dialog" aria-labelledby="bank-chooser-title" aria-describedby="bank-chooser-note">
+            <div class="bank-chooser-dialog-content">
+              <div class="subject-landing-header">
+                <div>
+                  <p class="eyebrow">Bộ câu hỏi</p>
+                  <h2 id="bank-chooser-title">Chọn môn hoặc bộ câu hỏi</h2>
+                  <p id="bank-chooser-note">Chọn một bộ để bắt đầu hoặc tiếp tục tiến độ đã lưu.</p>
+                </div>
+                <button id="close-bank-chooser-btn" class="icon-btn" type="button" aria-label="Đóng bộ chọn">&times;</button>
               </div>
-              <button id="toggle-bank-chooser-btn" class="secondary-btn" type="button" aria-expanded="true" aria-controls="bank-cards">Thu gọn</button>
+              <div id="bank-cards" class="bank-cards"></div>
             </div>
-            <div id="bank-cards" class="bank-cards"></div>
-          </div>
+          </dialog>
 
           <div class="practice-workspace">
             <div class="practice-main">
@@ -267,9 +269,23 @@
               </div>
             </div>
 
-            <aside class="practice-tools" aria-label="Điều hướng câu hỏi">
+            <aside class="practice-tools" aria-label="Tùy chọn và điều hướng câu hỏi">
+              <section class="practice-context" aria-label="Bộ câu hỏi và bộ lọc">
+                <div>
+                  <span id="practice-bank-subject">Bộ câu hỏi</span>
+                  <strong id="practice-bank-title">Đang tải…</strong>
+                </div>
+                <div class="practice-context-actions">
+                  <button id="toggle-bank-chooser-btn" class="secondary-btn" type="button" aria-expanded="false" aria-controls="subject-landing">Đổi bộ</button>
+                  <button id="side-filter-toggle-btn" class="secondary-btn" type="button" aria-expanded="false" aria-controls="practice-filters">Bộ lọc</button>
+                </div>
+              </section>
               <div class="practice-tools-header">
                 <h2>Điều hướng</h2>
+                <div class="bank-score" aria-label="Điểm của bộ câu hỏi" aria-live="polite">
+                  <span>Điểm</span>
+                  <strong id="bank-score">0 / 0</strong>
+                </div>
               </div>
               <div class="quick-jump" aria-label="Điều hướng nhanh">
                 <label>
@@ -297,11 +313,55 @@
                 <summary>Tùy chọn bộ câu hỏi</summary>
                 <div class="side-actions">
                   <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
-                  <button id="reset-progress-btn" class="ghost-btn danger-btn" type="button">Xóa tiến độ</button>
+                  <button id="attempt-history-btn" class="secondary-btn" type="button">Lịch sử làm bài</button>
+                  <button id="restart-progress-btn" class="secondary-btn" type="button">Làm lại bộ này</button>
                 </div>
               </details>
             </aside>
           </div>
+
+          <dialog id="completion-dialog" class="completion-dialog" aria-labelledby="completion-title" aria-describedby="completion-bank-name">
+            <form method="dialog" class="completion-dialog-content">
+              <button class="completion-close icon-btn" type="submit" value="close" aria-label="Đóng kết quả">&times;</button>
+              <p class="eyebrow">Đã hoàn thành</p>
+              <h2 id="completion-title">Kết quả bộ câu hỏi</h2>
+              <p id="completion-bank-name" class="completion-bank-name"></p>
+
+              <div class="completion-score" aria-label="Số câu trả lời đúng">
+                <strong id="completion-correct">0 / 0</strong>
+                <span>câu đúng</span>
+              </div>
+
+              <div class="completion-breakdown">
+                <div>
+                  <span>Độ chính xác</span>
+                  <strong id="completion-accuracy">0%</strong>
+                </div>
+                <div>
+                  <span>Câu trả lời sai</span>
+                  <strong id="completion-wrong">0</strong>
+                </div>
+              </div>
+
+              <div class="completion-actions">
+                <button id="review-wrong-btn" class="secondary-btn" type="button">Xem câu sai</button>
+                <button id="restart-bank-btn" class="primary-btn" type="button">Làm lại bộ này</button>
+              </div>
+            </form>
+          </dialog>
+
+          <dialog id="attempt-history-dialog" class="attempt-history-dialog" aria-labelledby="attempt-history-title" aria-describedby="attempt-history-bank-name">
+            <form method="dialog" class="attempt-history-dialog-content">
+              <button class="attempt-history-close icon-btn" type="submit" value="close" aria-label="Đóng lịch sử">&times;</button>
+              <p class="eyebrow">Theo từng lượt làm</p>
+              <h2 id="attempt-history-title">Lịch sử làm bài</h2>
+              <p id="attempt-history-bank-name" class="attempt-history-bank-name"></p>
+
+              <div id="current-attempt-summary" class="current-attempt-summary" hidden></div>
+              <div id="attempt-history-list" class="attempt-history-list"></div>
+              <p id="attempt-history-empty" class="attempt-history-empty">Chưa có phiên cũ. Kết quả hiện tại sẽ được lưu khi bạn chọn “Làm lại bộ này”.</p>
+            </form>
+          </dialog>
         </section>
 
         <section id="ranking-panel" class="panel" role="tabpanel" aria-labelledby="tab-ranking">

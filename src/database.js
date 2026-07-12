@@ -327,7 +327,7 @@ async function getProgress(userId) {
   if (!rows[0]) {
     return {
       found: false,
-      progress: { answers: {}, bookmarks: [] }
+      progress: { answers: {}, bookmarks: [], attemptHistory: [] }
     };
   }
 
@@ -675,8 +675,44 @@ function normalizeProgress(progress) {
   return {
     answers: progress?.answers && typeof progress.answers === 'object' ? progress.answers : {},
     bookmarks: Array.isArray(progress?.bookmarks) ? progress.bookmarks : [],
+    attemptHistory: normalizeAttemptHistory(progress?.attemptHistory),
     studySeconds: Math.max(0, Number.parseInt(progress?.studySeconds, 10) || 0)
   };
+}
+
+function normalizeAttemptHistory(history) {
+  if (!Array.isArray(history)) return [];
+
+  return history
+    .filter((attempt) => attempt && typeof attempt === 'object')
+    .map((attempt, index) => {
+      const total = Math.max(0, Number.parseInt(attempt.total, 10) || 0);
+      const done = Math.min(total || Number.MAX_SAFE_INTEGER, Math.max(0, Number.parseInt(attempt.done, 10) || 0));
+      const correct = Math.min(done, Math.max(0, Number.parseInt(attempt.correct, 10) || 0));
+      const startedAt = normalizeProgressDate(attempt.startedAt);
+      const endedAt = normalizeProgressDate(attempt.endedAt);
+
+      return {
+        id: String(attempt.id || `legacy-attempt-${index + 1}`).slice(0, 120),
+        bankId: String(attempt.bankId || '').slice(0, 500),
+        bankTitle: String(attempt.bankTitle || 'Bộ câu hỏi').slice(0, 500),
+        subject: String(attempt.subject || '').slice(0, 250),
+        startedAt,
+        endedAt,
+        total,
+        done,
+        correct,
+        wrong: done - correct,
+        accuracy: done ? Math.round((correct / done) * 100) : 0,
+        completed: total > 0 && done === total
+      };
+    })
+    .filter((attempt) => attempt.bankId && attempt.done > 0);
+}
+
+function normalizeProgressDate(value) {
+  const timestamp = Date.parse(String(value || ''));
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : '';
 }
 
 function normalizeUsername(username) {

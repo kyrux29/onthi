@@ -86,7 +86,7 @@ Khi chạy bằng Docker Compose, PostgreSQL lưu:
 - Lịch sử tạo câu hỏi AI, prompt request, summary, topics và bộ câu hỏi sinh ra.
 - Nội dung tài liệu đã trích xuất từ file upload.
 - Tài khoản, phân quyền admin/user.
-- Tiến độ làm bài và câu đã đánh dấu theo từng user.
+- Tiến độ hiện tại, câu đã đánh dấu và lịch sử từng lượt làm theo bộ câu hỏi của mỗi user.
 
 Sau khi restart Docker, vào tab **AI tài liệu** để nạp lại lịch sử trong phần **Đã lưu trong database**.
 

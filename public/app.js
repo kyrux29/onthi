@@ -20,7 +20,7 @@ const state = {
   generatedQuestions: [],
   filtered: [],
   currentIndex: 0,
-  progress: { answers: {}, bookmarks: [] },
+  progress: { answers: {}, bookmarks: [], attemptHistory: [] },
   ranking: [],
   aiResult: null,
   currentUser: null,
@@ -29,7 +29,7 @@ const state = {
   studyTimer: null,
   lastStudyActivityAt: Date.now(),
   questionNavPage: 0,
-  bankChooserOpen: true,
+  bankChooserOpen: false,
   questionEditMode: null,
   questionEditTargetId: null,
   questionEditInitialJson: ''
@@ -40,6 +40,7 @@ const els = {
   appShell: document.querySelector('.app-shell'),
   homeBrand: document.querySelector('#home-brand-btn'),
   filterToggle: document.querySelector('#filter-toggle-btn'),
+  sideFilterToggle: document.querySelector('#side-filter-toggle-btn'),
   filterClose: document.querySelector('#filter-close-btn'),
   sidebarScrim: document.querySelector('#sidebar-scrim'),
   loginForm: document.querySelector('#login-form'),
@@ -70,6 +71,7 @@ const els = {
   score: document.querySelector('#stat-score'),
   done: document.querySelector('#stat-done'),
   hours: document.querySelector('#stat-hours'),
+  bankScore: document.querySelector('#bank-score'),
   brandSubject: document.querySelector('#brand-subject'),
   brandTitle: document.querySelector('#brand-title'),
   bankSelect: document.querySelector('#bank-select'),
@@ -78,13 +80,17 @@ const els = {
   bankChooserTitle: document.querySelector('#bank-chooser-title'),
   bankChooserNote: document.querySelector('#bank-chooser-note'),
   toggleBankChooser: document.querySelector('#toggle-bank-chooser-btn'),
+  closeBankChooser: document.querySelector('#close-bank-chooser-btn'),
+  practiceBankSubject: document.querySelector('#practice-bank-subject'),
+  practiceBankTitle: document.querySelector('#practice-bank-title'),
   search: document.querySelector('#search-input'),
   chapter: document.querySelector('#chapter-select'),
   topic: document.querySelector('#topic-select'),
   mode: document.querySelector('#mode-select'),
   list: document.querySelector('#question-list'),
   shuffle: document.querySelector('#shuffle-btn'),
-  reset: document.querySelector('#reset-progress-btn'),
+  restart: document.querySelector('#restart-progress-btn'),
+  attemptHistoryButton: document.querySelector('#attempt-history-btn'),
   tabs: document.querySelectorAll('.tab'),
   panels: document.querySelectorAll('.panel'),
   aiStatus: document.querySelector('#ai-status'),
@@ -121,6 +127,18 @@ const els = {
   jump: document.querySelector('#jump-btn'),
   nextUnanswered: document.querySelector('#next-unanswered-btn'),
   nextWrong: document.querySelector('#next-wrong-btn'),
+  completionDialog: document.querySelector('#completion-dialog'),
+  completionBankName: document.querySelector('#completion-bank-name'),
+  completionCorrect: document.querySelector('#completion-correct'),
+  completionAccuracy: document.querySelector('#completion-accuracy'),
+  completionWrong: document.querySelector('#completion-wrong'),
+  reviewWrong: document.querySelector('#review-wrong-btn'),
+  restartBank: document.querySelector('#restart-bank-btn'),
+  attemptHistoryDialog: document.querySelector('#attempt-history-dialog'),
+  attemptHistoryBankName: document.querySelector('#attempt-history-bank-name'),
+  currentAttemptSummary: document.querySelector('#current-attempt-summary'),
+  attemptHistoryList: document.querySelector('#attempt-history-list'),
+  attemptHistoryEmpty: document.querySelector('#attempt-history-empty'),
   rankingList: document.querySelector('#ranking-list'),
   refreshRanking: document.querySelector('#refresh-ranking-btn'),
   prev: document.querySelector('#prev-btn'),
@@ -206,10 +224,16 @@ function bindEvents() {
   });
   els.bankSelect.addEventListener('change', () => selectBank(els.bankSelect.value, { closeChooser: true }));
   els.toggleBankChooser.addEventListener('click', () => {
-    state.bankChooserOpen = !state.bankChooserOpen;
+    state.bankChooserOpen = true;
+    renderBankChooser();
+  });
+  els.closeBankChooser.addEventListener('click', closeBankChooser);
+  els.subjectLanding.addEventListener('close', () => {
+    state.bankChooserOpen = false;
     renderBankChooser();
   });
   els.filterToggle.addEventListener('click', () => setFiltersOpen(!els.appShell.classList.contains('filters-open')));
+  els.sideFilterToggle.addEventListener('click', () => setFiltersOpen(!els.appShell.classList.contains('filters-open')));
   els.filterClose.addEventListener('click', () => setFiltersOpen(false));
   els.sidebarScrim.addEventListener('click', () => setFiltersOpen(false));
   els.questionPageSelect.addEventListener('change', () => {
@@ -224,7 +248,8 @@ function bindEvents() {
     applyFilters();
   });
   els.shuffle.addEventListener('click', shuffleCurrentSet);
-  els.reset.addEventListener('click', resetProgress);
+  els.restart.addEventListener('click', () => restartProgress());
+  els.attemptHistoryButton.addEventListener('click', openAttemptHistory);
   els.prev.addEventListener('click', () => moveQuestion(-1));
   els.next.addEventListener('click', () => moveQuestion(1));
   els.jump.addEventListener('click', jumpToQuestion);
@@ -239,6 +264,8 @@ function bindEvents() {
     const answer = getSavedAnswer(question);
     return answer && !answer.correct;
   }));
+  els.reviewWrong.addEventListener('click', reviewWrongAnswers);
+  els.restartBank.addEventListener('click', restartCurrentBank);
   els.editQuestion.addEventListener('click', () => openQuestionEditor('edit'));
   els.addQuestion.addEventListener('click', () => openQuestionEditor('add'));
   els.deleteQuestion.addEventListener('click', deleteCurrentQuestion);
@@ -610,6 +637,8 @@ function refreshTopicOptions() {
 function renderBankChrome(bank) {
   els.brandSubject.textContent = bank.subject || 'Kho câu hỏi';
   els.brandTitle.textContent = bank.title || 'Ôn thi trắc nghiệm';
+  els.practiceBankSubject.textContent = bank.subject || 'Bộ câu hỏi';
+  els.practiceBankTitle.textContent = bank.title || 'Ôn thi trắc nghiệm';
   document.title = bank.subject ? `Ôn thi ${bank.subject}` : 'Ôn thi trắc nghiệm';
 }
 
@@ -653,10 +682,14 @@ function getProgressStats() {
   const answers = questions.map(getSavedAnswer).filter(Boolean);
   const correct = answers.filter((answer) => answer.correct).length;
   const done = answers.length;
+  const total = questions.length;
   return {
+    total,
     correct,
     done,
-    score: done ? Math.round((correct / done) * 100) : 0
+    wrong: done - correct,
+    score: done ? Math.round((correct / done) * 100) : 0,
+    complete: total > 0 && done === total
   };
 }
 
@@ -700,18 +733,22 @@ async function selectBank(bankId, options = {}) {
 
 function renderBankChooser() {
   if (!els.bankCards || !els.toggleBankChooser) return;
-  const hasActiveBank = Boolean(state.activeBank);
-  const open = state.bankChooserOpen || !hasActiveBank;
-  els.subjectLanding.classList.toggle('collapsed', !open);
-  els.bankCards.hidden = !open;
+  const open = state.bankChooserOpen;
   els.toggleBankChooser.setAttribute('aria-expanded', open ? 'true' : 'false');
-  els.toggleBankChooser.textContent = open ? 'Thu gọn' : 'Đổi bộ';
-  els.bankChooserTitle.textContent = open
-    ? 'Chọn môn hoặc bộ câu hỏi'
-    : state.activeBank.title || 'Bộ câu hỏi đang học';
-  els.bankChooserNote.textContent = open
-    ? 'Chọn một bộ để bắt đầu hoặc tiếp tục tiến độ đã lưu.'
-    : `${state.activeBank.subject || 'Môn học'} · ${state.baseQuestions.length} câu`;
+  els.toggleBankChooser.textContent = 'Đổi bộ';
+  els.bankChooserTitle.textContent = 'Chọn môn hoặc bộ câu hỏi';
+  els.bankChooserNote.textContent = 'Chọn một bộ để bắt đầu hoặc tiếp tục tiến độ đã lưu.';
+
+  if (open && !els.subjectLanding.open) {
+    els.subjectLanding.showModal();
+  } else if (!open && els.subjectLanding.open) {
+    els.subjectLanding.close();
+  }
+}
+
+function closeBankChooser() {
+  state.bankChooserOpen = false;
+  renderBankChooser();
 }
 
 async function loadHealth() {
@@ -1447,6 +1484,7 @@ function renderFillAnswer(question, saved) {
 
 function selectAnswer(question, selected) {
   if (getSavedAnswer(question)) return;
+  const completedBefore = getProgressStats().complete;
   const correct = isCorrectAnswer(question, selected);
   state.progress.answers[getQuestionProgressKey(question)] = {
     selected,
@@ -1455,7 +1493,9 @@ function selectAnswer(question, selected) {
   };
   saveProgress();
   renderQuestion();
-  renderStats();
+  const stats = getProgressStats();
+  renderStats(stats);
+  if (!completedBefore && stats.complete) showCompletionDialog(stats);
 }
 
 function decorateOption(element, question, letter, selected) {
@@ -1641,13 +1681,12 @@ function formatStudyTime(seconds) {
   return restMinutes ? `${hours}g ${restMinutes}p` : `${hours} giờ`;
 }
 
-function renderStats() {
-  const questions = allQuestions();
-  const stats = getProgressStats();
-  els.total.textContent = questions.length;
+function renderStats(stats = getProgressStats()) {
+  els.total.textContent = stats.total;
   els.done.textContent = stats.done;
   els.score.textContent = `${stats.score}%`;
   els.hours.textContent = formatStudyTime(state.progress.studySeconds || 0);
+  els.bankScore.textContent = `${stats.correct} / ${stats.total}`;
   renderHome();
 }
 
@@ -1727,13 +1766,185 @@ function toggleBookmark() {
   else renderQuestion();
 }
 
-function resetProgress() {
-  if (!state.activeBank || !window.confirm(`Xóa toàn bộ đáp án và đánh dấu trong “${state.activeBank.title}”?`)) return;
-  for (const question of allQuestions()) {
-    deleteQuestionProgress(question);
+function restartProgress() {
+  if (!state.activeBank) return false;
+  const attempt = buildCurrentAttemptSummary();
+  const confirmed = window.confirm(
+    attempt
+      ? `Lưu lượt hiện tại (${attempt.correct}/${attempt.total} câu đúng) vào lịch sử và làm lại “${state.activeBank.title}”?`
+      : `Bộ “${state.activeBank.title}” chưa có câu trả lời. Bắt đầu lại từ câu đầu?`
+  );
+  if (!confirmed) return false;
+
+  if (attempt) {
+    state.progress.attemptHistory = [...state.progress.attemptHistory, attempt];
   }
+
+  const bankProgressPrefix = `${encodeURIComponent(String(state.activeBankId))}::`;
+  for (const progressKey of Object.keys(state.progress.answers)) {
+    if (progressKey.startsWith(bankProgressPrefix)) delete state.progress.answers[progressKey];
+  }
+
+  for (const question of allQuestions()) {
+    delete state.progress.answers[question.id];
+  }
+
+  resetPracticeView();
   saveProgress();
   applyFilters();
+  return true;
+}
+
+function buildCurrentAttemptSummary() {
+  const questions = allQuestions();
+  const answers = questions.map(getSavedAnswer).filter(Boolean);
+  if (!answers.length) return null;
+
+  const stats = getProgressStats();
+  const answerTimes = answers
+    .map((answer) => Date.parse(answer.at))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right);
+  const fallbackTime = Date.now();
+  const startedAt = new Date(answerTimes[0] || fallbackTime).toISOString();
+  const endedAt = new Date(answerTimes.at(-1) || fallbackTime).toISOString();
+  const randomId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  return {
+    id: `attempt-${randomId}`,
+    bankId: state.activeBankId,
+    bankTitle: state.activeBank.title || 'Bộ câu hỏi',
+    subject: state.activeBank.subject || '',
+    startedAt,
+    endedAt,
+    total: stats.total,
+    done: stats.done,
+    correct: stats.correct,
+    wrong: stats.wrong,
+    accuracy: stats.score,
+    completed: stats.complete
+  };
+}
+
+function resetPracticeView() {
+  els.search.value = '';
+  els.chapter.value = '';
+  refreshTopicOptions();
+  els.topic.value = '';
+  els.mode.value = 'study';
+  state.currentIndex = 0;
+  state.questionNavPage = 0;
+}
+
+function openAttemptHistory() {
+  if (!state.activeBank || !els.attemptHistoryDialog) return;
+  renderAttemptHistory();
+  if (!els.attemptHistoryDialog.open) els.attemptHistoryDialog.showModal();
+}
+
+function renderAttemptHistory() {
+  const currentStats = getProgressStats();
+  els.attemptHistoryBankName.textContent = state.activeBank?.title || 'Bộ câu hỏi đang học';
+  els.currentAttemptSummary.hidden = currentStats.done === 0;
+  els.currentAttemptSummary.textContent = currentStats.done
+    ? `Phiên hiện tại: ${currentStats.correct}/${currentStats.total} câu đúng · ${currentStats.done}/${currentStats.total} câu đã làm`
+    : '';
+
+  const attempts = state.progress.attemptHistory
+    .filter((attempt) => attempt.bankId === state.activeBankId)
+    .map((attempt, index) => ({ attempt, number: index + 1 }))
+    .reverse();
+
+  els.attemptHistoryList.innerHTML = '';
+  els.attemptHistoryEmpty.hidden = attempts.length > 0;
+
+  for (const { attempt, number } of attempts) {
+    const item = document.createElement('article');
+    item.className = 'attempt-history-item';
+
+    const header = document.createElement('div');
+    header.className = 'attempt-history-item-header';
+    const identity = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = `Lượt ${number}`;
+    const time = document.createElement('time');
+    time.dateTime = attempt.endedAt || '';
+    time.textContent = formatAttemptDate(attempt.endedAt);
+    identity.append(title, time);
+
+    const status = document.createElement('span');
+    status.className = `attempt-status${attempt.completed ? ' complete' : ''}`;
+    status.textContent = attempt.completed ? 'Hoàn thành' : 'Chưa hoàn thành';
+    header.append(identity, status);
+
+    const metrics = document.createElement('div');
+    metrics.className = 'attempt-history-metrics';
+    metrics.append(
+      createAttemptMetric('Điểm', `${attempt.correct}/${attempt.total}`),
+      createAttemptMetric('Đã làm', `${attempt.done}/${attempt.total}`),
+      createAttemptMetric('Chính xác', `${attempt.accuracy}%`)
+    );
+
+    item.append(header, metrics);
+    els.attemptHistoryList.appendChild(item);
+  }
+}
+
+function createAttemptMetric(label, value) {
+  const metric = document.createElement('div');
+  const labelElement = document.createElement('span');
+  const valueElement = document.createElement('strong');
+  labelElement.textContent = label;
+  valueElement.textContent = value;
+  metric.append(labelElement, valueElement);
+  return metric;
+}
+
+function formatAttemptDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Không rõ thời gian';
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function showCompletionDialog(stats = getProgressStats()) {
+  if (!state.activeBank || !stats.complete || !els.completionDialog) return;
+
+  els.completionBankName.textContent = state.activeBank.title || 'Bộ câu hỏi đang học';
+  els.completionCorrect.textContent = `${stats.correct} / ${stats.total}`;
+  els.completionAccuracy.textContent = `${stats.score}%`;
+  els.completionWrong.textContent = String(stats.wrong);
+  els.reviewWrong.disabled = stats.wrong === 0;
+  els.reviewWrong.textContent = stats.wrong ? `Xem ${stats.wrong} câu sai` : 'Không có câu sai';
+
+  if (!els.completionDialog.open) els.completionDialog.showModal();
+}
+
+function reviewWrongAnswers() {
+  const stats = getProgressStats();
+  if (!stats.wrong) return;
+
+  els.completionDialog.close();
+  els.search.value = '';
+  els.chapter.value = '';
+  refreshTopicOptions();
+  els.topic.value = '';
+  els.mode.value = 'wrong';
+  state.currentIndex = 0;
+  state.questionNavPage = 0;
+  applyFilters();
+  scrollCurrentQuestionIntoView();
+}
+
+function restartCurrentBank() {
+  if (!restartProgress()) return;
+  els.completionDialog.close();
+  scrollCurrentQuestionIntoView();
 }
 
 function activatePanel(panelId, options = {}) {
@@ -1768,6 +1979,7 @@ function setFiltersOpen(open) {
   const nextOpen = Boolean(open) && els.appShell.dataset.activePanel === 'practice-panel';
   els.appShell.classList.toggle('filters-open', nextOpen);
   els.filterToggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  els.sideFilterToggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
   document.body.classList.toggle('drawer-open', nextOpen);
 }
 
@@ -2207,13 +2419,9 @@ function migrateLegacyProgressForActiveBank() {
 function loadProgress() {
   try {
     const parsed = JSON.parse(localStorage.getItem(getProgressStorageKey()));
-    return {
-      answers: parsed?.answers || {},
-      bookmarks: parsed?.bookmarks || [],
-      studySeconds: Math.max(0, Number.parseInt(parsed?.studySeconds, 10) || 0)
-    };
+    return normalizeProgress(parsed);
   } catch {
-    return { answers: {}, bookmarks: [], studySeconds: 0 };
+    return normalizeProgress(null);
   }
 }
 
@@ -2285,8 +2493,41 @@ function normalizeProgress(progress) {
   return {
     answers: progress?.answers && typeof progress.answers === 'object' ? progress.answers : {},
     bookmarks: Array.isArray(progress?.bookmarks) ? progress.bookmarks : [],
+    attemptHistory: normalizeAttemptHistory(progress?.attemptHistory),
     studySeconds: Math.max(0, Number.parseInt(progress?.studySeconds, 10) || 0)
   };
+}
+
+function normalizeAttemptHistory(history) {
+  if (!Array.isArray(history)) return [];
+
+  return history
+    .filter((attempt) => attempt && typeof attempt === 'object')
+    .map((attempt, index) => {
+      const total = Math.max(0, Number.parseInt(attempt.total, 10) || 0);
+      const done = Math.min(total || Number.MAX_SAFE_INTEGER, Math.max(0, Number.parseInt(attempt.done, 10) || 0));
+      const correct = Math.min(done, Math.max(0, Number.parseInt(attempt.correct, 10) || 0));
+      return {
+        id: String(attempt.id || `legacy-attempt-${index + 1}`),
+        bankId: String(attempt.bankId || ''),
+        bankTitle: String(attempt.bankTitle || 'Bộ câu hỏi'),
+        subject: String(attempt.subject || ''),
+        startedAt: normalizeAttemptDate(attempt.startedAt),
+        endedAt: normalizeAttemptDate(attempt.endedAt),
+        total,
+        done,
+        correct,
+        wrong: done - correct,
+        accuracy: done ? Math.round((correct / done) * 100) : 0,
+        completed: total > 0 && done === total
+      };
+    })
+    .filter((attempt) => attempt.bankId && attempt.done > 0);
+}
+
+function normalizeAttemptDate(value) {
+  const timestamp = Date.parse(String(value || ''));
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : '';
 }
 
 function roleLabel(role) {
