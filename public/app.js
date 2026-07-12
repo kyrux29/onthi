@@ -303,10 +303,57 @@ function bindEvents() {
     event.returnValue = '';
   });
   document.addEventListener('pointerdown', markStudyActivity, { passive: true });
-  document.addEventListener('keydown', (event) => {
-    markStudyActivity();
-    if (event.key === 'Escape') setFiltersOpen(false);
-  });
+  document.addEventListener('keydown', handleGlobalKeydown);
+}
+
+function handleGlobalKeydown(event) {
+  markStudyActivity();
+  if (event.key === 'Escape') setFiltersOpen(false);
+  handlePracticeKeyboard(event);
+}
+
+function handlePracticeKeyboard(event) {
+  if (event.defaultPrevented || els.appShell.dataset.activePanel !== 'practice-panel') return;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if (document.querySelector('dialog[open]') || els.appShell.classList.contains('filters-open')) return;
+  if (!els.questionEditor.hidden || shouldIgnoreQuizShortcutTarget(event.target)) return;
+
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    const options = [...els.options.querySelectorAll('.option-btn:not(:disabled)')];
+    if (!options.length) return;
+
+    event.preventDefault();
+    const activeIndex = options.indexOf(document.activeElement);
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    const nextIndex = activeIndex < 0
+      ? (direction > 0 ? 0 : options.length - 1)
+      : (activeIndex + direction + options.length) % options.length;
+    options[nextIndex].focus({ preventScroll: true });
+    options[nextIndex].scrollIntoView({ block: 'nearest' });
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    const activeOption = document.activeElement?.closest?.('.option-btn:not(:disabled)');
+    if (!activeOption || event.repeat) return;
+    event.preventDefault();
+    activeOption.click();
+    return;
+  }
+
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault();
+    moveQuestion(event.key === 'ArrowRight' ? 1 : -1);
+    requestAnimationFrame(() => {
+      els.options.querySelector('.option-btn:not(:disabled)')?.focus({ preventScroll: true });
+    });
+  }
+}
+
+function shouldIgnoreQuizShortcutTarget(target) {
+  if (!(target instanceof Element)) return false;
+  if (target.closest('input, textarea, select, [contenteditable="true"]')) return true;
+  return Boolean(target.closest('button, a, summary, [role="button"]') && !target.closest('.option-btn'));
 }
 
 async function loadQuestions() {
@@ -1396,6 +1443,7 @@ function renderSingleChoice(question, saved) {
     const option = document.createElement('button');
     option.type = 'button';
     option.className = 'option-btn';
+    option.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown Enter');
     option.innerHTML = `
       <div class="option-header">
         <span class="option-letter">${letter}.</span>
@@ -1423,6 +1471,7 @@ function renderMultipleChoice(question, saved) {
     const option = document.createElement('button');
     option.type = 'button';
     option.className = 'option-btn';
+    option.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown Enter');
     option.setAttribute('aria-pressed', selected.has(letter) ? 'true' : 'false');
     option.innerHTML = `
       <div class="option-header">
