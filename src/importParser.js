@@ -88,6 +88,10 @@ function normalizeImportedQuestion({ question, index, subject, title }) {
     example: String(question.example || question.vi_du || '').trim(),
     tips,
     optionAnalysis: normalizeOptionAnalysis(optionAnalysis, options, answer),
+    table: normalizeTable(question.table || question.bang),
+    tables: normalizeTables(question.tables || question.cac_bang),
+    chart: normalizeChart(question.chart || question.do_thi || question.bieu_do),
+    timeline: normalizeTimeline(question.timeline || question.gantt || question.bieu_do_gantt),
     sourceHint: String(question.sourceHint || question.nguon || title).trim()
   };
 }
@@ -154,6 +158,93 @@ function fallbackOptionAnalysis(answer, letter) {
   return normalizeAnswerList(answer).includes(letter)
     ? 'Đây là đáp án đúng theo giải thích.'
     : 'Đây là phương án nhiễu; đối chiếu giải thích để thấy điểm sai.';
+}
+
+function normalizeTables(tables) {
+  if (!Array.isArray(tables)) return [];
+  return tables.map(normalizeTable).filter(Boolean);
+}
+
+function normalizeTable(table) {
+  if (!table || typeof table !== 'object') return null;
+  const columns = Array.isArray(table.columns || table.headers)
+    ? (table.columns || table.headers).map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const rows = Array.isArray(table.rows)
+    ? table.rows
+      .filter((row) => Array.isArray(row))
+      .map((row) => row.map((cell) => String(cell ?? '').trim()))
+      .filter((row) => row.some(Boolean))
+    : [];
+
+  if (!columns.length || !rows.length) return null;
+  return {
+    caption: String(table.caption || table.title || '').trim(),
+    columns,
+    rows
+  };
+}
+
+function normalizeChart(chart) {
+  if (!chart || typeof chart !== 'object') return null;
+  const data = Array.isArray(chart.data || chart.points)
+    ? (chart.data || chart.points).map(normalizeChartPoint).filter(Boolean)
+    : [];
+  if (!data.length) return null;
+
+  const type = String(chart.type || '').toLowerCase() === 'line' ? 'line' : 'bar';
+  return {
+    type,
+    title: String(chart.title || chart.caption || '').trim(),
+    xLabel: String(chart.xLabel || chart.x_label || '').trim(),
+    yLabel: String(chart.yLabel || chart.y_label || '').trim(),
+    data
+  };
+}
+
+function normalizeChartPoint(point, index) {
+  if (Array.isArray(point)) {
+    const value = Number(point[1]);
+    if (!Number.isFinite(value)) return null;
+    return {
+      label: String(point[0] ?? index + 1).trim(),
+      value
+    };
+  }
+
+  if (!point || typeof point !== 'object') return null;
+  const value = Number(point.value ?? point.y ?? point.count);
+  if (!Number.isFinite(value)) return null;
+  return {
+    label: String(point.label ?? point.x ?? index + 1).trim(),
+    value
+  };
+}
+
+function normalizeTimeline(timeline) {
+  if (!timeline || typeof timeline !== 'object') return null;
+  const segments = Array.isArray(timeline.segments || timeline.items)
+    ? (timeline.segments || timeline.items).map(normalizeTimelineSegment).filter(Boolean)
+    : [];
+  if (!segments.length) return null;
+
+  return {
+    caption: String(timeline.caption || timeline.title || '').trim(),
+    unit: String(timeline.unit || '').trim(),
+    segments
+  };
+}
+
+function normalizeTimelineSegment(segment, index) {
+  if (!segment || typeof segment !== 'object') return null;
+  const start = Number(segment.start);
+  const end = Number(segment.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  return {
+    label: String(segment.label || segment.name || `S${index + 1}`).trim(),
+    start,
+    end
+  };
 }
 
 module.exports = {

@@ -1,4 +1,16 @@
 const STORAGE_KEY_PREFIX = 'os-exam-trainer-progress-v2';
+const QUESTION_NAV_PAGE_SIZE = 50;
+const STUDY_IDLE_LIMIT_MS = 5 * 60 * 1000;
+const PANEL_HASHES = {
+  'home-panel': '#home',
+  'practice-panel': '#practice',
+  'ranking-panel': '#ranking',
+  'ai-panel': '#ai',
+  'import-panel': '#import',
+  'about-panel': '#about',
+  'settings-panel': '#settings',
+  'admin-panel': '#admin'
+};
 
 const state = {
   banks: [],
@@ -15,13 +27,21 @@ const state = {
   appStarted: false,
   progressSyncTimer: null,
   studyTimer: null,
+  lastStudyActivityAt: Date.now(),
+  questionNavPage: 0,
+  bankChooserOpen: true,
   questionEditMode: null,
-  questionEditTargetId: null
+  questionEditTargetId: null,
+  questionEditInitialJson: ''
 };
 
 const els = {
   authScreen: document.querySelector('#auth-screen'),
   appShell: document.querySelector('.app-shell'),
+  homeBrand: document.querySelector('#home-brand-btn'),
+  filterToggle: document.querySelector('#filter-toggle-btn'),
+  filterClose: document.querySelector('#filter-close-btn'),
+  sidebarScrim: document.querySelector('#sidebar-scrim'),
   loginForm: document.querySelector('#login-form'),
   loginMessage: document.querySelector('#login-message'),
   userStatus: document.querySelector('#user-status'),
@@ -55,6 +75,9 @@ const els = {
   bankSelect: document.querySelector('#bank-select'),
   bankCards: document.querySelector('#bank-cards'),
   subjectLanding: document.querySelector('#subject-landing'),
+  bankChooserTitle: document.querySelector('#bank-chooser-title'),
+  bankChooserNote: document.querySelector('#bank-chooser-note'),
+  toggleBankChooser: document.querySelector('#toggle-bank-chooser-btn'),
   search: document.querySelector('#search-input'),
   chapter: document.querySelector('#chapter-select'),
   topic: document.querySelector('#topic-select'),
@@ -67,8 +90,10 @@ const els = {
   aiStatus: document.querySelector('#ai-status'),
   questionChapter: document.querySelector('#question-chapter'),
   questionPosition: document.querySelector('#question-position'),
+  questionProgressBar: document.querySelector('#question-progress-bar'),
   questionTitle: document.querySelector('#question-title'),
   bookmark: document.querySelector('#bookmark-btn'),
+  questionVisuals: document.querySelector('#question-visuals'),
   questionTools: document.querySelector('#question-tools'),
   editQuestion: document.querySelector('#edit-question-btn'),
   addQuestion: document.querySelector('#add-question-btn'),
@@ -90,6 +115,8 @@ const els = {
   analysisTitle: document.querySelector('#option-analysis-title'),
   analysis: document.querySelector('#option-analysis'),
   questionJump: document.querySelector('#question-jump'),
+  questionPageSelect: document.querySelector('#question-page-select'),
+  questionPageSummary: document.querySelector('#question-page-summary'),
   jump: document.querySelector('#jump-btn'),
   nextUnanswered: document.querySelector('#next-unanswered-btn'),
   nextWrong: document.querySelector('#next-wrong-btn'),
@@ -149,6 +176,7 @@ async function startApp() {
     state.currentUser.role === 'admin' ? loadUsers() : Promise.resolve()
   ]);
   startStudyTimer();
+  activatePanel(panelFromLocation(), { updateHistory: false });
 }
 
 function bindAuthEvents() {
@@ -166,6 +194,7 @@ function bindEvents() {
   });
   els.chapter.addEventListener('change', () => {
     state.currentIndex = 0;
+    refreshTopicOptions();
     syncAIClassificationFields();
     applyFilters();
   });
@@ -174,7 +203,20 @@ function bindEvents() {
     syncAIClassificationFields();
     applyFilters();
   });
-  els.bankSelect.addEventListener('change', () => selectBank(els.bankSelect.value));
+  els.bankSelect.addEventListener('change', () => selectBank(els.bankSelect.value, { closeChooser: true }));
+  els.toggleBankChooser.addEventListener('click', () => {
+    state.bankChooserOpen = !state.bankChooserOpen;
+    renderBankChooser();
+  });
+  els.filterToggle.addEventListener('click', () => setFiltersOpen(!els.appShell.classList.contains('filters-open')));
+  els.filterClose.addEventListener('click', () => setFiltersOpen(false));
+  els.sidebarScrim.addEventListener('click', () => setFiltersOpen(false));
+  els.questionPageSelect.addEventListener('change', () => {
+    const requestedPage = Number.parseInt(els.questionPageSelect.value, 10) || 0;
+    state.questionNavPage = requestedPage;
+    state.currentIndex = Math.min(requestedPage * QUESTION_NAV_PAGE_SIZE, Math.max(0, state.filtered.length - 1));
+    renderQuestion();
+  });
   els.mode.addEventListener('change', () => {
     state.currentIndex = 0;
     applyFilters();
@@ -190,18 +232,19 @@ function bindEvents() {
       jumpToQuestion();
     }
   });
-  els.nextUnanswered.addEventListener('click', () => moveToNextMatch((question) => !state.progress.answers[question.id]));
+  els.nextUnanswered.addEventListener('click', () => moveToNextMatch((question) => !getSavedAnswer(question)));
   els.nextWrong.addEventListener('click', () => moveToNextMatch((question) => {
-    const answer = state.progress.answers[question.id];
+    const answer = getSavedAnswer(question);
     return answer && !answer.correct;
   }));
   els.editQuestion.addEventListener('click', () => openQuestionEditor('edit'));
   els.addQuestion.addEventListener('click', () => openQuestionEditor('add'));
   els.deleteQuestion.addEventListener('click', deleteCurrentQuestion);
   els.questionEditor.addEventListener('submit', saveQuestionEdit);
-  els.cancelQuestionEdit.addEventListener('click', closeQuestionEditor);
-  els.cancelQuestionEditSecondary.addEventListener('click', closeQuestionEditor);
+  els.cancelQuestionEdit.addEventListener('click', requestCloseQuestionEditor);
+  els.cancelQuestionEditSecondary.addEventListener('click', requestCloseQuestionEditor);
   els.refreshRanking.addEventListener('click', loadRanking);
+  els.homeBrand.addEventListener('click', () => activatePanel('home-panel'));
   els.userStatus.addEventListener('click', () => activatePanel('settings-panel'));
   els.bookmark.addEventListener('click', toggleBookmark);
   els.documentInput.addEventListener('change', updateFileLabel);
@@ -218,6 +261,18 @@ function bindEvents() {
   for (const action of els.quickActions) {
     action.addEventListener('click', () => runQuickAction(action.dataset.action));
   }
+
+  window.addEventListener('popstate', () => activatePanel(panelFromLocation(), { updateHistory: false }));
+  window.addEventListener('beforeunload', (event) => {
+    if (!hasUnsavedQuestionEdit()) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+  document.addEventListener('pointerdown', markStudyActivity, { passive: true });
+  document.addEventListener('keydown', (event) => {
+    markStudyActivity();
+    if (event.key === 'Escape') setFiltersOpen(false);
+  });
 }
 
 async function loadQuestions() {
@@ -231,10 +286,12 @@ async function loadQuestions() {
   state.baseQuestions = data.questions;
   state.generatedQuestions = [];
   state.currentIndex = 0;
+  state.questionNavPage = 0;
 
   renderBankChrome(data.bank);
   renderChapterOptions(data.chapters || []);
-  renderTopicOptions(data.topics || []);
+  refreshTopicOptions();
+  migrateLegacyProgressForActiveBank();
   syncAIClassificationFields();
 
   applyFilters();
@@ -253,8 +310,9 @@ async function loadCurrentUser() {
 async function login(event) {
   event.preventDefault();
   const formData = new FormData(els.loginForm);
-  els.loginMessage.textContent = 'Đang đăng nhập...';
+  els.loginMessage.textContent = 'Đang đăng nhập…';
   els.loginMessage.classList.remove('error');
+  setFormBusy(els.loginForm, true, 'Đang đăng nhập…');
 
   try {
     const response = await fetch('/api/auth/login', {
@@ -274,6 +332,8 @@ async function login(event) {
   } catch (error) {
     els.loginMessage.textContent = error.message;
     els.loginMessage.classList.add('error');
+  } finally {
+    setFormBusy(els.loginForm, false);
   }
 }
 
@@ -327,8 +387,9 @@ async function createUser(event) {
   if (state.currentUser?.role !== 'admin') return;
 
   const formData = new FormData(els.createUserForm);
-  els.adminMessage.textContent = 'Đang tạo tài khoản...';
+  els.adminMessage.textContent = 'Đang tạo tài khoản…';
   els.adminMessage.classList.remove('error');
+  setFormBusy(els.createUserForm, true, 'Đang tạo…');
 
   try {
     const response = await fetch('/api/admin/users', {
@@ -349,6 +410,8 @@ async function createUser(event) {
   } catch (error) {
     els.adminMessage.textContent = error.message;
     els.adminMessage.classList.add('error');
+  } finally {
+    setFormBusy(els.createUserForm, false);
   }
 }
 
@@ -359,7 +422,7 @@ async function changePassword(event) {
   const newPassword = String(formData.get('newPassword') || '');
   const confirmPassword = String(formData.get('confirmPassword') || '');
 
-  els.passwordMessage.textContent = 'Đang cập nhật mật khẩu...';
+  els.passwordMessage.textContent = 'Đang cập nhật mật khẩu…';
   els.passwordMessage.classList.remove('error');
 
   if (newPassword !== confirmPassword) {
@@ -367,6 +430,8 @@ async function changePassword(event) {
     els.passwordMessage.classList.add('error');
     return;
   }
+
+  setFormBusy(els.passwordForm, true, 'Đang cập nhật…');
 
   try {
     const response = await fetch('/api/account/password', {
@@ -382,6 +447,8 @@ async function changePassword(event) {
   } catch (error) {
     els.passwordMessage.textContent = error.message;
     els.passwordMessage.classList.add('error');
+  } finally {
+    setFormBusy(els.passwordForm, false);
   }
 }
 
@@ -419,7 +486,7 @@ function renderUsers(users) {
 async function changeUserRole(userId, role, previousRole, select) {
   if (state.currentUser?.role !== 'admin') return;
   select.disabled = true;
-  els.adminMessage.textContent = 'Đang cập nhật quyền...';
+  els.adminMessage.textContent = 'Đang cập nhật quyền…';
   els.adminMessage.classList.remove('error');
 
   try {
@@ -511,6 +578,7 @@ function renderChapterOptions(chapters) {
 }
 
 function renderTopicOptions(topics) {
+  const currentTopic = els.topic.value;
   els.topic.innerHTML = '<option value="">Tất cả chủ đề</option>';
   for (const topic of topics) {
     const option = document.createElement('option');
@@ -518,6 +586,18 @@ function renderTopicOptions(topics) {
     option.textContent = topic;
     els.topic.appendChild(option);
   }
+  els.topic.value = topics.includes(currentTopic) ? currentTopic : '';
+}
+
+function refreshTopicOptions() {
+  const chapter = els.chapter.value;
+  const topics = [...new Set(
+    allQuestions()
+      .filter((question) => !chapter || question.chapter === chapter)
+      .map((question) => question.topic)
+      .filter(Boolean)
+  )].sort((left, right) => left.localeCompare(right, 'vi'));
+  renderTopicOptions(topics);
 }
 
 function renderBankChrome(bank) {
@@ -547,9 +627,10 @@ function renderBankCards() {
       <span>${escapeHtml(bank.title)}</span>
       <small>${bank.source === 'database' ? `${bank.shared ? 'Đã share' : 'Riêng tư'} · ` : ''}${bank.total} câu · ${bank.chapters.length} chương · ${bank.topics.length} chủ đề</small>
     `;
-    card.addEventListener('click', () => selectBank(bank.id));
+    card.addEventListener('click', () => selectBank(bank.id, { closeChooser: true }));
     els.bankCards.appendChild(card);
   }
+  renderBankChooser();
 }
 
 function renderHome() {
@@ -562,11 +643,9 @@ function renderHome() {
 
 function getProgressStats() {
   const questions = allQuestions();
-  const knownIds = new Set(questions.map((question) => question.id));
-  const answerEntries = Object.entries(state.progress.answers)
-    .filter(([id]) => !knownIds.size || knownIds.has(id));
-  const correct = answerEntries.filter(([, value]) => value.correct).length;
-  const done = answerEntries.length;
+  const answers = questions.map(getSavedAnswer).filter(Boolean);
+  const correct = answers.filter((answer) => answer.correct).length;
+  const done = answers.length;
   return {
     correct,
     done,
@@ -589,17 +668,43 @@ function runQuickAction(action) {
   }
 
   state.currentIndex = 0;
+  if (action === 'continue') state.bankChooserOpen = false;
+  renderBankChooser();
   applyFilters();
   activatePanel('practice-panel');
 }
 
-async function selectBank(bankId) {
+async function selectBank(bankId, options = {}) {
+  if (!confirmDiscardQuestionEdit()) {
+    els.bankSelect.value = state.activeBankId;
+    return;
+  }
+  const { closeChooser = false } = options;
   state.activeBankId = bankId;
   els.bankSelect.value = bankId;
   await loadQuestions();
   for (const card of els.bankCards.querySelectorAll('.bank-card')) {
     card.classList.toggle('active', state.banks[Array.from(els.bankCards.children).indexOf(card)]?.id === bankId);
   }
+  if (closeChooser) state.bankChooserOpen = false;
+  renderBankChooser();
+  if (window.matchMedia('(max-width: 1180px)').matches) setFiltersOpen(false);
+}
+
+function renderBankChooser() {
+  if (!els.bankCards || !els.toggleBankChooser) return;
+  const hasActiveBank = Boolean(state.activeBank);
+  const open = state.bankChooserOpen || !hasActiveBank;
+  els.subjectLanding.classList.toggle('collapsed', !open);
+  els.bankCards.hidden = !open;
+  els.toggleBankChooser.setAttribute('aria-expanded', open ? 'true' : 'false');
+  els.toggleBankChooser.textContent = open ? 'Thu gọn' : 'Đổi bộ';
+  els.bankChooserTitle.textContent = open
+    ? 'Chọn môn hoặc bộ câu hỏi'
+    : state.activeBank.title || 'Bộ câu hỏi đang học';
+  els.bankChooserNote.textContent = open
+    ? 'Chọn một bộ để bắt đầu hoặc tiếp tục tiến độ đã lưu.'
+    : `${state.activeBank.subject || 'Môn học'} · ${state.baseQuestions.length} câu`;
 }
 
 async function loadHealth() {
@@ -630,12 +735,13 @@ function applyFilters() {
   const mode = els.mode.value;
 
   state.filtered = allQuestions().filter((question) => {
-    const result = state.progress.answers[question.id];
+    const result = getSavedAnswer(question);
     const matchesKeyword = !keyword || normalize([
       question.prompt,
       question.chapter,
       question.topic,
       question.explanation,
+      visualSearchText(question),
       ...Object.values(question.options || {})
     ].join(' ')).includes(keyword);
     const matchesChapter = !chapter || question.chapter === chapter;
@@ -643,7 +749,7 @@ function applyFilters() {
     const matchesMode =
       mode === 'study' ||
       (mode === 'wrong' && result && !result.correct) ||
-      (mode === 'bookmarked' && state.progress.bookmarks.includes(question.id)) ||
+      (mode === 'bookmarked' && isQuestionBookmarked(question)) ||
       (mode === 'generated' && question.generated);
 
     return matchesKeyword && matchesChapter && matchesTopic && matchesMode;
@@ -660,21 +766,36 @@ function applyFilters() {
 
 function renderList() {
   els.list.innerHTML = '';
+  const pageCount = Math.max(1, Math.ceil(state.filtered.length / QUESTION_NAV_PAGE_SIZE));
+  state.questionNavPage = Math.min(
+    Math.floor(state.currentIndex / QUESTION_NAV_PAGE_SIZE),
+    pageCount - 1
+  );
+  renderQuestionPageOptions(pageCount);
 
-  for (const [index, question] of state.filtered.entries()) {
+  const start = state.questionNavPage * QUESTION_NAV_PAGE_SIZE;
+  const end = Math.min(start + QUESTION_NAV_PAGE_SIZE, state.filtered.length);
+  els.questionPageSummary.textContent = state.filtered.length
+    ? `${start + 1}-${end} / ${state.filtered.length}`
+    : '0 câu';
+
+  for (let index = start; index < end; index += 1) {
+    const question = state.filtered[index];
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'question-chip';
     button.textContent = question.generated ? `AI${question.number}` : String(question.number).padStart(3, '0');
-    button.title = question.prompt;
+    button.setAttribute('aria-label', `Câu ${question.number}: ${question.prompt}`);
     button.addEventListener('click', () => {
+      if (!confirmDiscardQuestionEdit()) return;
       state.currentIndex = index;
       renderQuestion();
       renderList();
     });
 
-    const answer = state.progress.answers[question.id];
+    const answer = getSavedAnswer(question);
     button.classList.toggle('active', index === state.currentIndex);
+    if (index === state.currentIndex) button.setAttribute('aria-current', 'true');
     button.classList.toggle('correct', Boolean(answer?.correct));
     button.classList.toggle('wrong', Boolean(answer && !answer.correct));
     els.list.appendChild(button);
@@ -688,11 +809,32 @@ function renderList() {
   });
 }
 
+function renderQuestionPageOptions(pageCount) {
+  const expectedCount = state.filtered.length ? pageCount : 0;
+  if (els.questionPageSelect.options.length !== expectedCount ||
+      els.questionPageSelect.dataset.total !== String(state.filtered.length)) {
+    els.questionPageSelect.innerHTML = '';
+    for (let page = 0; page < expectedCount; page += 1) {
+      const start = page * QUESTION_NAV_PAGE_SIZE + 1;
+      const end = Math.min((page + 1) * QUESTION_NAV_PAGE_SIZE, state.filtered.length);
+      const option = document.createElement('option');
+      option.value = String(page);
+      option.textContent = `${start}-${end}`;
+      els.questionPageSelect.appendChild(option);
+    }
+    els.questionPageSelect.dataset.total = String(state.filtered.length);
+  }
+  els.questionPageSelect.disabled = expectedCount <= 1;
+  if (expectedCount) els.questionPageSelect.value = String(state.questionNavPage);
+}
+
 function renderQuestion() {
   const question = state.filtered[state.currentIndex];
   els.options.innerHTML = '';
   els.analysis.innerHTML = '';
   els.tips.innerHTML = '';
+  els.questionVisuals.innerHTML = '';
+  els.questionVisuals.hidden = true;
 
   if (!question) {
     els.questionChapter.textContent = 'Không có câu phù hợp';
@@ -700,21 +842,24 @@ function renderQuestion() {
     els.questionJump.value = '';
     els.questionJump.max = '1';
     els.questionTitle.textContent = 'Không tìm thấy câu hỏi theo bộ lọc hiện tại.';
+    els.questionProgressBar.style.width = '0%';
     els.answerPanel.hidden = true;
     els.bookmark.classList.remove('active');
     renderQuestionTools(null);
     return;
   }
 
-  const saved = state.progress.answers[question.id];
+  const saved = getSavedAnswer(question);
   els.questionChapter.textContent = [question.subject, question.chapter, question.topic].filter(Boolean).join(' · ');
   els.questionPosition.textContent = `${state.currentIndex + 1} / ${state.filtered.length}`;
   els.questionJump.max = String(state.filtered.length);
   els.questionJump.value = String(state.currentIndex + 1);
   els.questionTitle.textContent = `${question.generated ? 'AI' : `Câu ${String(question.number).padStart(3, '0')}`}. ${question.prompt}`;
-  els.bookmark.classList.toggle('active', state.progress.bookmarks.includes(question.id));
-  els.bookmark.textContent = state.progress.bookmarks.includes(question.id) ? '★' : '☆';
+  els.questionProgressBar.style.width = `${((state.currentIndex + 1) / state.filtered.length) * 100}%`;
+  els.bookmark.classList.toggle('active', isQuestionBookmarked(question));
+  els.bookmark.textContent = isQuestionBookmarked(question) ? '★' : '☆';
   renderQuestionTools(question);
+  renderQuestionVisuals(question);
 
   if (getQuestionType(question) === 'fill') {
     renderFillAnswer(question, saved);
@@ -750,6 +895,253 @@ function renderQuestionTools(question) {
   }
 }
 
+function renderQuestionVisuals(question) {
+  const blocks = [];
+  const tables = [...(question.tables || []), question.table].filter(Boolean);
+  for (const table of tables) blocks.push(createTableVisual(table));
+  if (question.chart) blocks.push(createChartVisual(question.chart));
+  if (question.timeline) blocks.push(createTimelineVisual(question.timeline));
+
+  for (const block of blocks.filter(Boolean)) {
+    els.questionVisuals.appendChild(block);
+  }
+
+  els.questionVisuals.hidden = !els.questionVisuals.children.length;
+}
+
+function createTableVisual(table) {
+  if (!Array.isArray(table?.columns) || !Array.isArray(table?.rows) || !table.columns.length || !table.rows.length) {
+    return null;
+  }
+
+  const block = document.createElement('section');
+  block.className = 'visual-block visual-table-block';
+  if (table.caption) {
+    const caption = document.createElement('h3');
+    caption.textContent = table.caption;
+    block.appendChild(caption);
+  }
+
+  const scroll = document.createElement('div');
+  scroll.className = 'visual-table-scroll';
+  const htmlTable = document.createElement('table');
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  for (const column of table.columns) {
+    const th = document.createElement('th');
+    th.textContent = column;
+    headRow.appendChild(th);
+  }
+  thead.appendChild(headRow);
+  htmlTable.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  for (const row of table.rows) {
+    const tr = document.createElement('tr');
+    for (let index = 0; index < table.columns.length; index += 1) {
+      const td = document.createElement('td');
+      td.textContent = row[index] ?? '';
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  htmlTable.appendChild(tbody);
+  scroll.appendChild(htmlTable);
+  block.appendChild(scroll);
+  return block;
+}
+
+function createChartVisual(chart) {
+  const data = normalizeChartData(chart?.data);
+  if (!data.length) return null;
+
+  const block = document.createElement('section');
+  block.className = `visual-block chart-block chart-${chart.type === 'line' ? 'line' : 'bar'}`;
+  if (chart.title) {
+    const title = document.createElement('h3');
+    title.textContent = chart.title;
+    block.appendChild(title);
+  }
+
+  if (chart.type === 'line') {
+    block.appendChild(createLineChart(data, chart.title));
+  } else {
+    block.appendChild(createBarChart(data));
+  }
+
+  if (chart.xLabel || chart.yLabel) {
+    const note = document.createElement('p');
+    note.className = 'visual-axis-note';
+    note.textContent = [chart.xLabel && `X: ${chart.xLabel}`, chart.yLabel && `Y: ${chart.yLabel}`].filter(Boolean).join(' · ');
+    block.appendChild(note);
+  }
+
+  return block;
+}
+
+function createBarChart(data) {
+  const max = Math.max(...data.map((point) => point.value), 1);
+  const chart = document.createElement('div');
+  chart.className = 'bar-chart';
+
+  for (const point of data) {
+    const row = document.createElement('div');
+    row.className = 'chart-bar-row';
+    row.innerHTML = `
+      <span class="chart-label"></span>
+      <span class="chart-bar-track"><span class="chart-bar-fill"></span></span>
+      <strong class="chart-value"></strong>
+    `;
+    row.querySelector('.chart-label').textContent = point.label;
+    row.querySelector('.chart-bar-fill').style.width = `${Math.max(4, (point.value / max) * 100)}%`;
+    row.querySelector('.chart-value').textContent = formatVisualNumber(point.value);
+    chart.appendChild(row);
+  }
+
+  return chart;
+}
+
+function createLineChart(data, title) {
+  const width = 640;
+  const height = 220;
+  const padding = 28;
+  const min = Math.min(...data.map((point) => point.value), 0);
+  const max = Math.max(...data.map((point) => point.value), 1);
+  const span = max - min || 1;
+  const xStep = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
+  const points = data.map((point, index) => {
+    const x = padding + (index * xStep);
+    const y = height - padding - (((point.value - min) / span) * (height - padding * 2));
+    return { ...point, x, y };
+  });
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', title || 'Biểu đồ đường của câu hỏi');
+  svg.classList.add('line-chart');
+
+  const axis = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  axis.setAttribute('d', `M ${padding} ${padding} V ${height - padding} H ${width - padding}`);
+  axis.setAttribute('class', 'line-chart-axis');
+  svg.appendChild(axis);
+
+  const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+  polyline.setAttribute('points', points.map((point) => `${point.x},${point.y}`).join(' '));
+  polyline.setAttribute('class', 'line-chart-stroke');
+  svg.appendChild(polyline);
+
+  for (const point of points) {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', point.x);
+    circle.setAttribute('cy', point.y);
+    circle.setAttribute('r', '4');
+    circle.setAttribute('class', 'line-chart-point');
+    svg.appendChild(circle);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', point.x);
+    label.setAttribute('y', height - 8);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('class', 'line-chart-label');
+    label.textContent = point.label;
+    svg.appendChild(label);
+  }
+
+  return svg;
+}
+
+function createTimelineVisual(timeline) {
+  const segments = Array.isArray(timeline?.segments) ? timeline.segments : [];
+  if (!segments.length) return null;
+
+  const starts = segments.map((segment) => Number(segment.start)).filter(Number.isFinite);
+  const ends = segments.map((segment) => Number(segment.end)).filter(Number.isFinite);
+  const min = Math.min(...starts, 0);
+  const max = Math.max(...ends, 1);
+  const span = max - min || 1;
+  const block = document.createElement('section');
+  block.className = 'visual-block timeline-block';
+
+  if (timeline.caption) {
+    const title = document.createElement('h3');
+    title.textContent = timeline.caption;
+    block.appendChild(title);
+  }
+
+  const track = document.createElement('div');
+  track.className = 'timeline-track';
+  for (const segment of segments) {
+    const start = Number(segment.start);
+    const end = Number(segment.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    const item = document.createElement('div');
+    item.className = 'timeline-segment';
+    item.style.left = `${((start - min) / span) * 100}%`;
+    item.style.width = `${Math.max(6, ((end - start) / span) * 100)}%`;
+    item.innerHTML = `<strong></strong><span></span>`;
+    item.querySelector('strong').textContent = segment.label || '';
+    item.querySelector('span').textContent = `${formatVisualNumber(start)}-${formatVisualNumber(end)}${timeline.unit ? ` ${timeline.unit}` : ''}`;
+    track.appendChild(item);
+  }
+  block.appendChild(track);
+
+  const scale = document.createElement('div');
+  scale.className = 'timeline-scale';
+  scale.innerHTML = `<span>${formatVisualNumber(min)}</span><span>${formatVisualNumber(max)}${timeline.unit ? ` ${escapeHtml(timeline.unit)}` : ''}</span>`;
+  block.appendChild(scale);
+  return block;
+}
+
+function normalizeChartData(data) {
+  if (!Array.isArray(data)) return [];
+  return data.map((point, index) => {
+    if (Array.isArray(point)) {
+      const value = Number(point[1]);
+      return Number.isFinite(value)
+        ? { label: String(point[0] ?? index + 1), value }
+        : null;
+    }
+    const value = Number(point?.value ?? point?.y ?? point?.count);
+    return Number.isFinite(value)
+      ? { label: String(point.label ?? point.x ?? index + 1), value }
+      : null;
+  }).filter(Boolean);
+}
+
+function visualSearchText(question) {
+  return JSON.stringify({
+    table: question.table || null,
+    tables: question.tables || [],
+    chart: question.chart || null,
+    timeline: question.timeline || null
+  });
+}
+
+function visualSummary(question) {
+  const parts = [];
+  const tableCount = (isRenderableTable(question.table) ? 1 : 0) + (question.tables || []).filter(isRenderableTable).length;
+  if (tableCount) parts.push(`${tableCount} bảng`);
+  if (question.chart?.data?.length) parts.push(question.chart.type === 'line' ? 'biểu đồ đường' : 'biểu đồ cột');
+  if (question.timeline?.segments?.length) parts.push('timeline/Gantt');
+  return parts.join(', ');
+}
+
+function isRenderableTable(table) {
+  return Array.isArray(table?.columns) && table.columns.length &&
+    Array.isArray(table?.rows) && table.rows.length;
+}
+
+function hasVisualObject(value) {
+  return value && typeof value === 'object' && Object.keys(value).length > 0;
+}
+
+function formatVisualNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value || '');
+  return Number.isInteger(number) ? String(number) : number.toFixed(2).replace(/\.?0+$/, '');
+}
+
 function canManageCurrentBank() {
   return state.activeBank?.source === 'database' &&
     ['admin', 'editor'].includes(state.currentUser?.role);
@@ -769,6 +1161,7 @@ function openQuestionEditor(mode) {
     null,
     2
   );
+  state.questionEditInitialJson = els.questionEditorJson.value;
   els.questionEditorMessage.textContent = mode === 'add'
     ? 'Tạo câu theo đúng schema. Câu fill vẫn phải có explanation, example và tips.'
     : 'Chỉnh JSON rồi lưu. Hệ thống sẽ kiểm tra prompt, đáp án và giải thích trước khi ghi database.';
@@ -780,9 +1173,28 @@ function closeQuestionEditor() {
   if (!els.questionEditor) return;
   state.questionEditMode = null;
   state.questionEditTargetId = null;
+  state.questionEditInitialJson = '';
   els.questionEditor.hidden = true;
   els.questionEditorMessage.textContent = '';
   els.questionEditorMessage.classList.remove('error');
+}
+
+function hasUnsavedQuestionEdit() {
+  return Boolean(
+    els.questionEditor &&
+    !els.questionEditor.hidden &&
+    els.questionEditorJson.value !== state.questionEditInitialJson
+  );
+}
+
+function requestCloseQuestionEditor() {
+  confirmDiscardQuestionEdit();
+}
+
+function confirmDiscardQuestionEdit() {
+  if (hasUnsavedQuestionEdit() && !window.confirm('Bỏ các thay đổi chưa lưu của câu hỏi này?')) return false;
+  if (!els.questionEditor.hidden) closeQuestionEditor();
+  return true;
 }
 
 async function saveQuestionEdit(event) {
@@ -811,8 +1223,9 @@ async function saveQuestionEdit(event) {
   const previousBankId = state.activeBankId;
   const targetIndex = mode === 'add' ? state.baseQuestions.length : state.currentIndex;
 
-  els.questionEditorMessage.textContent = 'Đang lưu câu hỏi...';
+  els.questionEditorMessage.textContent = 'Đang lưu câu hỏi…';
   els.questionEditorMessage.classList.remove('error');
+  setFormBusy(els.questionEditor, true, 'Đang lưu…');
 
   try {
     const response = await fetch(endpoint, {
@@ -832,6 +1245,8 @@ async function saveQuestionEdit(event) {
   } catch (error) {
     els.questionEditorMessage.textContent = error.message;
     els.questionEditorMessage.classList.add('error');
+  } finally {
+    setFormBusy(els.questionEditor, false);
   }
 }
 
@@ -854,8 +1269,7 @@ async function deleteCurrentQuestion() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Không xóa được câu hỏi.');
 
-    delete state.progress.answers[question.id];
-    state.progress.bookmarks = state.progress.bookmarks.filter((id) => id !== question.id);
+    deleteQuestionProgress(question);
     saveProgress();
     closeQuestionEditor();
     await loadSubjects();
@@ -884,6 +1298,10 @@ function serializeQuestionForEdit(question) {
     difficulty: question.difficulty || 'Trung bình',
     questionType: getQuestionType(question),
     prompt: question.prompt || '',
+    ...(hasVisualObject(question.table) ? { table: question.table } : {}),
+    ...(question.tables?.length ? { tables: question.tables } : {}),
+    ...(hasVisualObject(question.chart) ? { chart: question.chart } : {}),
+    ...(hasVisualObject(question.timeline) ? { timeline: question.timeline } : {}),
     options: question.options || {},
     answer: question.answer,
     explanation: question.explanation || '',
@@ -913,8 +1331,8 @@ function buildQuestionTemplate(referenceQuestion) {
     tips: ['Mẹo nhận dạng nhanh dạng bài này.', 'Mẹo loại trừ phương án nhiễu.'],
     optionAnalysis: {
       A: 'Đáp án đúng theo khái niệm hoặc công thức.',
-      B: 'Phương án nhiễu, sai ở điểm...',
-      C: 'Phương án nhiễu, dễ nhầm với...',
+      B: 'Phương án nhiễu, sai ở điểm…',
+      C: 'Phương án nhiễu, dễ nhầm với…',
       D: 'Phương án nhiễu, không phù hợp ngữ cảnh câu hỏi.'
     }
   };
@@ -922,10 +1340,9 @@ function buildQuestionTemplate(referenceQuestion) {
 
 function renderSingleChoice(question, saved) {
   for (const letter of getOptionLetters(question)) {
-    const option = document.createElement('div');
+    const option = document.createElement('button');
+    option.type = 'button';
     option.className = 'option-btn';
-    option.setAttribute('role', 'button');
-    option.tabIndex = 0;
     option.innerHTML = `
       <div class="option-header">
         <span class="option-letter">${letter}.</span>
@@ -933,15 +1350,12 @@ function renderSingleChoice(question, saved) {
       </div>
     `;
     option.querySelector('.option-text').textContent = question.options[letter];
-    option.addEventListener('click', () => selectAnswer(question, letter));
-    option.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        selectAnswer(question, letter);
-      }
-    });
-
-    if (saved) decorateOption(option, question, letter, saved.selected);
+    if (saved) {
+      option.disabled = true;
+      decorateOption(option, question, letter, saved.selected);
+    } else {
+      option.addEventListener('click', () => selectAnswer(question, letter));
+    }
     els.options.appendChild(option);
   }
 }
@@ -950,13 +1364,13 @@ function renderMultipleChoice(question, saved) {
   const selected = new Set(Array.isArray(saved?.selected) ? saved.selected : []);
   const controls = document.createElement('div');
   controls.className = 'multi-submit-row';
+  let submit = null;
 
   for (const letter of getOptionLetters(question)) {
-    const option = document.createElement('div');
+    const option = document.createElement('button');
+    option.type = 'button';
     option.className = 'option-btn';
-    option.setAttribute('role', 'checkbox');
-    option.setAttribute('aria-checked', selected.has(letter) ? 'true' : 'false');
-    option.tabIndex = saved ? -1 : 0;
+    option.setAttribute('aria-pressed', selected.has(letter) ? 'true' : 'false');
     option.innerHTML = `
       <div class="option-header">
         <span class="option-letter">${letter}.</span>
@@ -970,15 +1384,11 @@ function renderMultipleChoice(question, saved) {
         if (selected.has(letter)) selected.delete(letter);
         else selected.add(letter);
         option.classList.toggle('selected', selected.has(letter));
-        option.setAttribute('aria-checked', selected.has(letter) ? 'true' : 'false');
-      });
-      option.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          option.click();
-        }
+        option.setAttribute('aria-pressed', selected.has(letter) ? 'true' : 'false');
+        if (submit) submit.disabled = selected.size === 0;
       });
     } else {
+      option.disabled = true;
       decorateOption(option, question, letter, saved.selected);
     }
 
@@ -987,10 +1397,11 @@ function renderMultipleChoice(question, saved) {
   }
 
   if (!saved) {
-    const submit = document.createElement('button');
+    submit = document.createElement('button');
     submit.className = 'primary-btn';
     submit.type = 'button';
     submit.textContent = 'Chốt đáp án';
+    submit.disabled = selected.size === 0;
     submit.addEventListener('click', () => selectAnswer(question, [...selected].sort()));
     controls.appendChild(submit);
     els.options.appendChild(controls);
@@ -1003,7 +1414,7 @@ function renderFillAnswer(question, saved) {
   form.innerHTML = `
     <label>
       <span>Điền đáp án</span>
-      <input name="answer" type="text" autocomplete="off" placeholder="Nhập đáp án ngắn">
+      <input name="answer" type="text" autocomplete="off" placeholder="Nhập đáp án ngắn…" required>
     </label>
     <button class="primary-btn" type="submit">Kiểm tra</button>
   `;
@@ -1019,8 +1430,9 @@ function renderFillAnswer(question, saved) {
 }
 
 function selectAnswer(question, selected) {
+  if (getSavedAnswer(question)) return;
   const correct = isCorrectAnswer(question, selected);
-  state.progress.answers[question.id] = {
+  state.progress.answers[getQuestionProgressKey(question)] = {
     selected,
     correct,
     at: new Date().toISOString()
@@ -1043,18 +1455,18 @@ function decorateOption(element, question, letter, selected) {
     const feedback = document.createElement('div');
     feedback.className = 'option-feedback';
     const isCorrect = isCorrectLetter;
-    const isSelected = isSelectedLetter;
+    const showLearningDetail = isCorrect && getQuestionType(question) === 'single';
     const status = isCorrect ? '✓ Chính xác!' : '✕ Chưa đúng';
-    const explanation = isCorrect
+    const explanation = showLearningDetail
       ? question.explanation || buildOptionAnalysis(question, letter)
       : buildOptionAnalysis(question, letter);
-    const tips = isSelected || isCorrect ? question.tips || [] : [];
+    const tips = showLearningDetail ? question.tips || [] : [];
 
     feedback.innerHTML = `
       <strong class="feedback-status">${status}</strong>
       <p></p>
-      ${question.example && isCorrect ? `<p class="feedback-example"><strong>Ví dụ:</strong> ${escapeHtml(question.example)}</p>` : ''}
-      ${tips.length && isCorrect ? `<div class="feedback-tips">${tips.map((tip) => `<span>${escapeHtml(tip)}</span>`).join('')}</div>` : ''}
+      ${question.example && showLearningDetail ? `<p class="feedback-example"><strong>Ví dụ:</strong> ${escapeHtml(question.example)}</p>` : ''}
+      ${tips.length ? `<div class="feedback-tips">${tips.map((tip) => `<span>${escapeHtml(tip)}</span>`).join('')}</div>` : ''}
     `;
     feedback.querySelector('p').textContent = explanation;
     element.appendChild(feedback);
@@ -1218,6 +1630,7 @@ function syncAIClassificationFields() {
 
 function moveQuestion(delta) {
   if (!state.filtered.length) return;
+  if (!confirmDiscardQuestionEdit()) return;
   state.currentIndex = (state.currentIndex + delta + state.filtered.length) % state.filtered.length;
   renderQuestion();
 }
@@ -1226,6 +1639,7 @@ function jumpToQuestion() {
   if (!state.filtered.length) return;
   const requested = Number.parseInt(els.questionJump.value, 10);
   if (!Number.isFinite(requested)) return;
+  if (!confirmDiscardQuestionEdit()) return;
   const nextIndex = Math.min(Math.max(requested, 1), state.filtered.length) - 1;
   state.currentIndex = nextIndex;
   renderQuestion();
@@ -1233,6 +1647,7 @@ function jumpToQuestion() {
 
 function moveToNextMatch(predicate) {
   if (!state.filtered.length) return;
+  if (!confirmDiscardQuestionEdit()) return;
   const total = state.filtered.length;
   for (let step = 1; step <= total; step += 1) {
     const nextIndex = (state.currentIndex + step) % total;
@@ -1245,6 +1660,7 @@ function moveToNextMatch(predicate) {
 }
 
 function shuffleCurrentSet() {
+  if (!confirmDiscardQuestionEdit()) return;
   for (let index = state.filtered.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     [state.filtered[index], state.filtered[swapIndex]] = [state.filtered[swapIndex], state.filtered[index]];
@@ -1257,30 +1673,63 @@ function shuffleCurrentSet() {
 function toggleBookmark() {
   const question = state.filtered[state.currentIndex];
   if (!question) return;
-  const exists = state.progress.bookmarks.includes(question.id);
+  const progressKey = getQuestionProgressKey(question);
+  const exists = isQuestionBookmarked(question);
   state.progress.bookmarks = exists
-    ? state.progress.bookmarks.filter((id) => id !== question.id)
-    : [...state.progress.bookmarks, question.id];
+    ? state.progress.bookmarks.filter((id) => ![progressKey, question.id].includes(id))
+    : [...state.progress.bookmarks, progressKey];
   saveProgress();
-  renderQuestion();
+  if (els.mode.value === 'bookmarked') applyFilters();
+  else renderQuestion();
 }
 
 function resetProgress() {
-  state.progress = { answers: {}, bookmarks: [], studySeconds: state.progress.studySeconds || 0 };
+  if (!state.activeBank || !window.confirm(`Xóa toàn bộ đáp án và đánh dấu trong “${state.activeBank.title}”?`)) return;
+  for (const question of allQuestions()) {
+    deleteQuestionProgress(question);
+  }
   saveProgress();
   applyFilters();
 }
 
-function activatePanel(panelId) {
+function activatePanel(panelId, options = {}) {
+  const { updateHistory = true } = options;
+  const requestedPanel = document.getElementById(panelId);
+  const restrictedAdminPanel = panelId === 'admin-panel' && state.currentUser?.role !== 'admin';
+  if (!requestedPanel || restrictedAdminPanel) panelId = 'home-panel';
+
   for (const tab of els.tabs) {
-    tab.classList.toggle('active', tab.dataset.panel === panelId);
+    const isActive = tab.dataset.panel === panelId;
+    tab.classList.toggle('active', isActive);
+    tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
   }
   for (const panel of els.panels) {
-    panel.classList.toggle('active', panel.id === panelId);
+    const isActive = panel.id === panelId;
+    panel.classList.toggle('active', isActive);
+    panel.setAttribute('aria-hidden', isActive ? 'false' : 'true');
   }
+  els.appShell.dataset.activePanel = panelId;
+  if (panelId !== 'practice-panel') setFiltersOpen(false);
+  if (panelId === 'practice-panel') markStudyActivity();
   if (panelId === 'ranking-panel') {
     loadRanking();
   }
+  const nextHash = PANEL_HASHES[panelId] || '#home';
+  if (updateHistory && window.location.hash !== nextHash) {
+    window.history.pushState({ panelId }, '', nextHash);
+  }
+}
+
+function setFiltersOpen(open) {
+  const nextOpen = Boolean(open) && els.appShell.dataset.activePanel === 'practice-panel';
+  els.appShell.classList.toggle('filters-open', nextOpen);
+  els.filterToggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  document.body.classList.toggle('drawer-open', nextOpen);
+}
+
+function panelFromLocation() {
+  const match = Object.entries(PANEL_HASHES).find(([, hash]) => hash === window.location.hash.toLowerCase());
+  return match?.[0] || 'home-panel';
 }
 
 function updateFileLabel() {
@@ -1291,9 +1740,8 @@ function updateFileLabel() {
 async function generateFromDocuments(event) {
   event.preventDefault();
   const formData = new FormData(els.aiForm);
-  const button = document.querySelector('#generate-btn');
-  button.disabled = true;
-  els.aiMessage.textContent = 'Đang gửi prompt và phân tích tài liệu...';
+  setFormBusy(els.aiForm, true, 'Đang tạo câu hỏi…');
+  els.aiMessage.textContent = 'Đang gửi prompt và phân tích tài liệu…';
   els.aiMessage.classList.remove('error');
 
   try {
@@ -1312,7 +1760,7 @@ async function generateFromDocuments(event) {
     els.aiMessage.textContent = error.message;
     els.aiMessage.classList.add('error');
   } finally {
-    button.disabled = false;
+    setFormBusy(els.aiForm, false);
   }
 }
 
@@ -1333,6 +1781,7 @@ function renderAIResult(data) {
         <span>${escapeHtml(question.difficulty || 'Trung bình')}</span>
       </div>
       <h3>${index + 1}. ${escapeHtml(question.prompt)}</h3>
+      ${visualSummary(question) ? `<p><strong>Visual:</strong> ${escapeHtml(visualSummary(question))}</p>` : ''}
       ${getOptionLetters(question).length ? `<div class="generated-options">
         ${getOptionLetters(question).map((letter) => `
           <div class="${normalizeAnswerList(question.answer).includes(letter) ? 'is-answer' : ''}">
@@ -1415,6 +1864,49 @@ function insertSampleImportJson() {
         }
       },
       {
+        chapter: 'Chương 2 - Điều phối CPU',
+        topic: 'Round Robin',
+        difficulty: 'Trung bình',
+        questionType: 'single',
+        prompt: 'Với quantum = 2, tiến trình nào hoàn thành cuối cùng theo timeline đã cho?',
+        table: {
+          caption: 'Bảng tiến trình',
+          columns: ['Tiến trình', 'Arrival time', 'Burst time'],
+          rows: [
+            ['P1', '0', '4'],
+            ['P2', '1', '3'],
+            ['P3', '2', '2']
+          ]
+        },
+        timeline: {
+          caption: 'Gantt chart Round Robin',
+          unit: 'ms',
+          segments: [
+            { label: 'P1', start: 0, end: 2 },
+            { label: 'P2', start: 2, end: 4 },
+            { label: 'P3', start: 4, end: 6 },
+            { label: 'P1', start: 6, end: 8 },
+            { label: 'P2', start: 8, end: 9 }
+          ]
+        },
+        options: {
+          A: 'P1',
+          B: 'P2',
+          C: 'P3',
+          D: 'P1 và P2 hoàn thành cùng lúc'
+        },
+        answer: 'B',
+        explanation: 'Theo Gantt chart, P3 hoàn thành ở 6 ms, P1 hoàn thành ở 8 ms và P2 hoàn thành ở 9 ms, nên P2 hoàn thành cuối cùng.',
+        example: 'Trong Round Robin, ta lần lượt đưa tiến trình chưa xong về cuối ready queue sau mỗi quantum.',
+        tips: ['Đọc thời điểm kết thúc ở cạnh phải đoạn cuối cùng của mỗi tiến trình.', 'Với Round Robin, đừng cộng burst liên tục như FCFS nếu tiến trình bị chia lát.'],
+        optionAnalysis: {
+          A: 'P1 hoàn thành ở 8 ms, chưa phải cuối cùng.',
+          B: 'Đúng vì đoạn cuối của P2 kết thúc ở 9 ms.',
+          C: 'P3 hoàn thành ở 6 ms.',
+          D: 'Sai vì P1 kết thúc ở 8 ms còn P2 kết thúc ở 9 ms.'
+        }
+      },
+      {
         chapter: 'Chương 4 - Quản lý bộ nhớ',
         topic: 'Phân trang',
         difficulty: 'Dễ',
@@ -1440,8 +1932,9 @@ async function importQuestionsFromJson(event) {
     return;
   }
 
-  els.importMessage.textContent = 'Đang kiểm tra và nạp câu hỏi...';
+  els.importMessage.textContent = 'Đang kiểm tra và nạp câu hỏi…';
   els.importMessage.classList.remove('error');
+  setFormBusy(els.importForm, true, 'Đang nạp…');
 
   try {
     const response = await fetch('/api/import/questions', {
@@ -1459,7 +1952,7 @@ async function importQuestionsFromJson(event) {
     renderAIResult(data);
     await loadSubjects();
     if (data.runId) {
-      await selectBank(`run:${data.runId}`);
+      await selectBank(`run:${data.runId}`, { closeChooser: true });
     }
     await loadAIRuns();
     els.importMessage.textContent = `Đã nạp ${data.questions.length} câu hỏi.`;
@@ -1467,6 +1960,8 @@ async function importQuestionsFromJson(event) {
   } catch (error) {
     els.importMessage.textContent = error.message;
     els.importMessage.classList.add('error');
+  } finally {
+    setFormBusy(els.importForm, false);
   }
 }
 
@@ -1529,7 +2024,7 @@ async function toggleRunShare(run) {
 }
 
 async function loadAIRun(id) {
-  els.aiMessage.textContent = 'Đang nạp lịch sử từ database...';
+  els.aiMessage.textContent = 'Đang nạp lịch sử từ database…';
   els.aiMessage.classList.remove('error');
 
   try {
@@ -1554,7 +2049,7 @@ function importGeneratedQuestions() {
   if (!state.aiResult?.questions?.length) return;
   if (state.aiResult.runId) {
     loadSubjects()
-      .then(() => selectBank(`run:${state.aiResult.runId}`))
+      .then(() => selectBank(`run:${state.aiResult.runId}`, { closeChooser: true }))
       .then(() => activatePanel('practice-panel'))
       .catch(() => importGeneratedQuestionsInMemory());
     return;
@@ -1599,6 +2094,72 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function setFormBusy(form, busy, busyLabel = 'Đang xử lý…') {
+  const button = form?.querySelector('button[type="submit"]');
+  if (!form || !button) return;
+
+  if (busy) {
+    if (!button.dataset.idleLabel) button.dataset.idleLabel = button.textContent;
+    button.textContent = busyLabel;
+    button.disabled = true;
+    form.setAttribute('aria-busy', 'true');
+    return;
+  }
+
+  button.textContent = button.dataset.idleLabel || button.textContent;
+  button.disabled = false;
+  form.removeAttribute('aria-busy');
+}
+
+function getQuestionProgressKey(question, bankId = state.activeBankId) {
+  const bankKey = encodeURIComponent(String(bankId || question?.bankId || 'default'));
+  const questionKey = String(question?.id || question?.number || 'unknown');
+  return `${bankKey}::${questionKey}`;
+}
+
+function getSavedAnswer(question) {
+  if (!question) return null;
+  return state.progress.answers[getQuestionProgressKey(question)] || state.progress.answers[question.id] || null;
+}
+
+function isQuestionBookmarked(question) {
+  if (!question) return false;
+  return state.progress.bookmarks.includes(getQuestionProgressKey(question)) ||
+    state.progress.bookmarks.includes(question.id);
+}
+
+function deleteQuestionProgress(question) {
+  if (!question) return;
+  const progressKey = getQuestionProgressKey(question);
+  delete state.progress.answers[progressKey];
+  delete state.progress.answers[question.id];
+  state.progress.bookmarks = state.progress.bookmarks.filter((id) => ![progressKey, question.id].includes(id));
+}
+
+function migrateLegacyProgressForActiveBank() {
+  let changed = false;
+  const bookmarks = new Set(state.progress.bookmarks);
+
+  for (const question of allQuestions()) {
+    const progressKey = getQuestionProgressKey(question);
+    if (state.progress.answers[question.id] && !state.progress.answers[progressKey]) {
+      state.progress.answers[progressKey] = state.progress.answers[question.id];
+      delete state.progress.answers[question.id];
+      changed = true;
+    }
+    if (bookmarks.has(question.id)) {
+      bookmarks.delete(question.id);
+      bookmarks.add(progressKey);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    state.progress.bookmarks = [...bookmarks];
+    saveProgress();
+  }
+}
+
 function loadProgress() {
   try {
     const parsed = JSON.parse(localStorage.getItem(getProgressStorageKey()));
@@ -1620,12 +2181,18 @@ function saveProgress() {
 function startStudyTimer() {
   if (state.studyTimer) return;
   state.studyTimer = setInterval(() => {
-    if (!state.currentUser || document.hidden) return;
+    const activePanel = els.appShell.dataset.activePanel;
+    const recentlyActive = Date.now() - state.lastStudyActivityAt <= STUDY_IDLE_LIMIT_MS;
+    if (!state.currentUser || document.hidden || activePanel !== 'practice-panel' || !recentlyActive || !state.filtered.length) return;
     state.progress.studySeconds = Math.max(0, Number(state.progress.studySeconds) || 0) + 15;
     localStorage.setItem(getProgressStorageKey(), JSON.stringify(state.progress));
     renderStats();
     queueProgressSync(800);
   }, 15000);
+}
+
+function markStudyActivity() {
+  state.lastStudyActivityAt = Date.now();
 }
 
 function getProgressStorageKey() {
@@ -1659,7 +2226,8 @@ async function syncProgress() {
     await fetch('/api/progress', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ progress: state.progress })
+      body: JSON.stringify({ progress: state.progress }),
+      keepalive: true
     });
     if (document.querySelector('#ranking-panel')?.classList.contains('active')) {
       loadRanking();

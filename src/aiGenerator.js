@@ -24,6 +24,62 @@ const questionSchema = {
         additionalProperties: false,
         properties: {
           prompt: { type: 'string' },
+          table: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              caption: { type: 'string' },
+              columns: { type: 'array', items: { type: 'string' } },
+              rows: {
+                type: 'array',
+                items: {
+                  type: 'array',
+                  items: { type: 'string' }
+                }
+              }
+            }
+          },
+          chart: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              type: { type: 'string', enum: ['bar', 'line'] },
+              title: { type: 'string' },
+              xLabel: { type: 'string' },
+              yLabel: { type: 'string' },
+              data: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    label: { type: 'string' },
+                    value: { type: 'number' }
+                  }
+                }
+              }
+            }
+          },
+          timeline: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              caption: { type: 'string' },
+              unit: { type: 'string' },
+              segments: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    label: { type: 'string' },
+                    start: { type: 'number' },
+                    end: { type: 'number' }
+                  }
+                }
+              }
+            }
+          },
           questionType: { type: 'string', enum: ['single', 'multiple', 'fill'] },
           options: {
             type: 'object',
@@ -81,6 +137,9 @@ const questionSchema = {
         },
         required: [
           'prompt',
+          'table',
+          'chart',
+          'timeline',
           'questionType',
           'options',
           'answer',
@@ -248,6 +307,7 @@ async function requestQuestionGeneration({
           'Hãy tạo câu hỏi sát tài liệu, có 4 lựa chọn A-D, một đáp án đúng, giải thích chi tiết, ví dụ trong môn và mẹo làm nhanh.',
           'Được phép tạo 3 kiểu câu: single, multiple, fill. Câu single có một đáp án; multiple có nhiều đáp án đúng; fill là câu điền đáp án ngắn.',
           'Không bịa ngoài tài liệu nếu không cần; nếu tài liệu thiếu ngữ cảnh thì tạo câu hỏi khái niệm dựa trên phần đã có.',
+          'Nếu câu hỏi cần bảng, biểu đồ hoặc Gantt chart, hãy đưa dữ liệu vào table, chart hoặc timeline có cấu trúc. Nếu không cần visual thì trả object rỗng cho các field đó.',
           'Mẹo làm nhanh phải ngắn, thực dụng, giúp loại trừ đáp án hoặc nhớ công thức.',
           'Mỗi câu phải có subject, chapter và topic rõ ràng để hệ thống sắp xếp theo môn, chương, chủ đề.',
           'Luôn trả đúng JSON schema; không thêm markdown, không thêm lời chào.'
@@ -308,7 +368,7 @@ async function requestQuestionGeneration({
     topic
   }));
   parsed.requestPrompt = redactDocumentBody(requestPrompt);
-  parsed.schemaVersion = 2;
+  parsed.schemaVersion = 4;
   return parsed;
 }
 
@@ -347,6 +407,7 @@ function buildRequestPrompt({
     '',
     '# Khung bắt buộc cho từng câu',
     '- Câu hỏi: một câu rõ ràng, kiểm tra đúng khái niệm hoặc kỹ năng trong tài liệu.',
+    '- Bảng/đồ thị nếu cần: dùng table cho bảng dữ liệu, chart cho biểu đồ cột/đường, timeline cho Gantt chart. Nếu không cần thì đặt table={}, chart={}, timeline={}.',
     '- Kiểu câu questionType: single, multiple hoặc fill.',
     '- Câu single: có 4-8 lựa chọn A-H, answer là một chữ cái.',
     '- Câu multiple: có 4-8 lựa chọn A-H, answer là mảng chữ cái đúng, ví dụ ["A","C"].',
@@ -366,7 +427,7 @@ function defaultPromptFrame() {
   return [
     'Hãy phân tích tài liệu được upload và tạo bộ câu hỏi ôn thi trắc nghiệm cho môn học tương ứng.',
     'Ưu tiên câu hỏi có tính thi cử: định nghĩa, phân biệt khái niệm, bài tính ngắn, bẫy thường gặp.',
-    'Mỗi câu phải có questionType. Tạo phối hợp câu một đáp án, chọn nhiều đáp án và điền đáp án khi tài liệu phù hợp. Câu fill vẫn phải có giải thích, ví dụ và mẹo làm bài. Câu trắc nghiệm có thể có 4-8 lựa chọn A-H.'
+    'Mỗi câu phải có questionType. Tạo phối hợp câu một đáp án, chọn nhiều đáp án và điền đáp án khi tài liệu phù hợp. Câu fill vẫn phải có giải thích, ví dụ và mẹo làm bài. Câu trắc nghiệm có thể có 4-8 lựa chọn A-H. Nếu tài liệu có bảng tiến trình, bảng trang, biểu đồ hoặc Gantt chart, hãy chuyển thành table/chart/timeline có cấu trúc.'
   ].join(' ');
 }
 
@@ -390,6 +451,9 @@ function normalizeGeneratedQuestion({ question, index, fileNames, batchIndex = 0
     source: fileNames.join(', '),
     questionType,
     prompt: String(question.prompt || ''),
+    table: normalizeTable(question.table),
+    chart: normalizeChart(question.chart),
+    timeline: normalizeTimeline(question.timeline),
     options,
     answer,
     answerText: answerTextFor(options, answer, questionType),
@@ -499,6 +563,83 @@ function fallbackOptionAnalysis(answer, letter) {
   return normalizeAnswerList(answer).includes(letter)
     ? 'Đây là lựa chọn đúng theo giải thích.'
     : 'Đây là lựa chọn nhiễu; đối chiếu với giải thích để thấy điểm sai.';
+}
+
+function normalizeTable(table) {
+  if (!table || typeof table !== 'object') return {};
+  const columns = Array.isArray(table.columns || table.headers)
+    ? (table.columns || table.headers).map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const rows = Array.isArray(table.rows)
+    ? table.rows
+      .filter((row) => Array.isArray(row))
+      .map((row) => row.map((cell) => String(cell ?? '').trim()))
+      .filter((row) => row.some(Boolean))
+    : [];
+  if (!columns.length || !rows.length) return {};
+  return {
+    caption: String(table.caption || table.title || '').trim(),
+    columns,
+    rows
+  };
+}
+
+function normalizeChart(chart) {
+  if (!chart || typeof chart !== 'object') return {};
+  const data = Array.isArray(chart.data || chart.points)
+    ? (chart.data || chart.points).map(normalizeChartPoint).filter(Boolean)
+    : [];
+  if (!data.length) return {};
+  return {
+    type: String(chart.type || '').toLowerCase() === 'line' ? 'line' : 'bar',
+    title: String(chart.title || chart.caption || '').trim(),
+    xLabel: String(chart.xLabel || chart.x_label || '').trim(),
+    yLabel: String(chart.yLabel || chart.y_label || '').trim(),
+    data
+  };
+}
+
+function normalizeChartPoint(point, index) {
+  if (Array.isArray(point)) {
+    const value = Number(point[1]);
+    if (!Number.isFinite(value)) return null;
+    return {
+      label: String(point[0] ?? index + 1).trim(),
+      value
+    };
+  }
+  if (!point || typeof point !== 'object') return null;
+  const value = Number(point.value ?? point.y ?? point.count);
+  if (!Number.isFinite(value)) return null;
+  return {
+    label: String(point.label ?? point.x ?? index + 1).trim(),
+    value
+  };
+}
+
+function normalizeTimeline(timeline) {
+  if (!timeline || typeof timeline !== 'object') return {};
+  const segments = Array.isArray(timeline.segments || timeline.items)
+    ? (timeline.segments || timeline.items).map(normalizeTimelineSegment).filter(Boolean)
+    : [];
+  if (!segments.length) return {};
+  return {
+    caption: String(timeline.caption || timeline.title || '').trim(),
+    unit: String(timeline.unit || '').trim(),
+    segments
+  };
+}
+
+function normalizeTimelineSegment(segment, index) {
+  if (!segment || typeof segment !== 'object') return null;
+  const start = Number(segment.start);
+  const end = Number(segment.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  return {
+    label: String(segment.label || segment.name || `S${index + 1}`).trim(),
+    start,
+    end
+  };
 }
 
 function normalizeOptions(options = {}) {

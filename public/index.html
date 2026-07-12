@@ -3,11 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#173f3b">
     <title>Ôn thi Hệ điều hành</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <div id="react-enhancements" hidden></div>
+    <a class="skip-link" href="#main-workspace">Đi thẳng tới nội dung</a>
     <section id="auth-screen" class="auth-screen">
       <section class="auth-intro" aria-label="Giới thiệu nền tảng">
         <p class="eyebrow">Exam Workspace</p>
@@ -32,19 +34,23 @@
         </div>
         <label>
           <span>Username</span>
-          <input id="login-username" name="username" type="text" autocomplete="username" required>
+          <input id="login-username" name="username" type="text" autocomplete="username" spellcheck="false" required>
         </label>
         <label>
           <span>Mật khẩu</span>
           <input id="login-password" name="password" type="password" autocomplete="current-password" required>
         </label>
         <button class="primary-btn" type="submit">Đăng nhập</button>
-        <p id="login-message" class="form-message"></p>
+        <p id="login-message" class="form-message" aria-live="polite"></p>
       </form>
     </section>
 
-    <div class="app-shell" hidden>
-      <aside class="sidebar">
+    <div class="app-shell" data-active-panel="home-panel" hidden>
+      <aside id="practice-filters" class="sidebar" aria-label="Bộ lọc luyện tập">
+        <div class="sidebar-drawer-head">
+          <strong>Bộ lọc luyện tập</strong>
+          <button id="filter-close-btn" class="ghost-btn" type="button">Đóng</button>
+        </div>
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">
             <span></span><span></span><span></span><span></span>
@@ -57,7 +63,7 @@
 
         <label class="subject-switcher">
           <span>Môn / bộ câu hỏi</span>
-          <select id="bank-select"></select>
+          <select id="bank-select" name="bank" autocomplete="off"></select>
         </label>
 
         <div class="stats-grid" aria-label="Thống kê">
@@ -82,23 +88,23 @@
         <div class="filter-stack">
           <label>
             <span>Tìm kiếm</span>
-            <input id="search-input" type="search" placeholder="tiến trình, LRU, SCAN...">
+            <input id="search-input" name="search" type="search" autocomplete="off" placeholder="Ví dụ: tiến trình, LRU, SCAN…">
           </label>
           <label>
             <span>Chương</span>
-            <select id="chapter-select">
+            <select id="chapter-select" name="chapter" autocomplete="off">
               <option value="">Tất cả chương</option>
             </select>
           </label>
           <label>
             <span>Chủ đề</span>
-            <select id="topic-select">
+            <select id="topic-select" name="topic" autocomplete="off">
               <option value="">Tất cả chủ đề</option>
             </select>
           </label>
           <label>
             <span>Chế độ</span>
-            <select id="mode-select">
+            <select id="mode-select" name="mode" autocomplete="off">
               <option value="study">Ôn từng câu</option>
               <option value="wrong">Câu đã sai</option>
               <option value="bookmarked">Đã đánh dấu</option>
@@ -108,26 +114,39 @@
         </div>
 
       </aside>
+      <button id="sidebar-scrim" class="sidebar-scrim" type="button" aria-label="Đóng bộ lọc" tabindex="-1"></button>
 
-      <main class="workspace">
+      <main id="main-workspace" class="workspace" tabindex="-1">
         <section class="topbar">
-          <div class="tabs" role="tablist" aria-label="Khu vực">
-            <button class="tab active" type="button" data-panel="home-panel">Trang chủ</button>
-            <button class="tab" type="button" data-panel="practice-panel">Luyện tập</button>
-            <button class="tab" type="button" data-panel="ranking-panel">Xếp hạng</button>
-            <button class="tab" type="button" data-panel="ai-panel">AI tài liệu</button>
-            <button class="tab" type="button" data-panel="import-panel">Nạp câu hỏi</button>
-            <button class="tab" type="button" data-panel="about-panel">About</button>
-            <button class="tab admin-only" type="button" data-panel="admin-panel" hidden>Quản trị</button>
+          <div class="topbar-primary">
+            <button id="home-brand-btn" class="topbar-brand" type="button" aria-label="Về trang chủ">
+              <span class="brand-mark compact" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+              </span>
+              <span>
+                <strong>Học Phần</strong>
+                <small>Không gian ôn thi</small>
+              </span>
+            </button>
+            <div class="topbar-actions">
+              <button id="filter-toggle-btn" class="secondary-btn filter-toggle-btn" type="button" aria-expanded="false" aria-controls="practice-filters">Bộ lọc</button>
+              <div class="ai-status" id="ai-status" aria-live="polite">AI: đang kiểm tra…</div>
+              <button class="user-pill" id="user-status" type="button" title="Mở cài đặt tài khoản"></button>
+              <button id="logout-btn" class="ghost-btn" type="button">Thoát</button>
+            </div>
           </div>
-          <div class="topbar-actions">
-            <div class="ai-status" id="ai-status">AI: đang kiểm tra</div>
-            <button class="user-pill" id="user-status" type="button" title="Cài đặt tài khoản"></button>
-            <button id="logout-btn" class="ghost-btn" type="button">Đăng xuất</button>
-          </div>
+          <nav class="tabs" role="tablist" aria-label="Khu vực">
+            <button id="tab-home" class="tab active" role="tab" aria-selected="true" aria-controls="home-panel" type="button" data-panel="home-panel">Trang chủ</button>
+            <button id="tab-practice" class="tab" role="tab" aria-selected="false" aria-controls="practice-panel" type="button" data-panel="practice-panel">Luyện tập</button>
+            <button id="tab-ranking" class="tab" role="tab" aria-selected="false" aria-controls="ranking-panel" type="button" data-panel="ranking-panel">Xếp hạng</button>
+            <button id="tab-ai" class="tab" role="tab" aria-selected="false" aria-controls="ai-panel" type="button" data-panel="ai-panel">AI tài liệu</button>
+            <button id="tab-import" class="tab" role="tab" aria-selected="false" aria-controls="import-panel" type="button" data-panel="import-panel">Nạp câu hỏi</button>
+            <button id="tab-about" class="tab" role="tab" aria-selected="false" aria-controls="about-panel" type="button" data-panel="about-panel">Tác giả</button>
+            <button id="tab-admin" class="tab admin-only" role="tab" aria-selected="false" aria-controls="admin-panel" type="button" data-panel="admin-panel" hidden>Quản trị</button>
+          </nav>
         </section>
 
-        <section id="home-panel" class="panel active">
+        <section id="home-panel" class="panel active" role="tabpanel" aria-labelledby="tab-home">
           <div class="home-grid">
             <section class="home-hero">
               <div>
@@ -155,11 +174,15 @@
           </div>
         </section>
 
-        <section id="practice-panel" class="panel">
+        <section id="practice-panel" class="panel" role="tabpanel" aria-labelledby="tab-practice">
           <div id="subject-landing" class="subject-landing">
-            <div>
-              <p class="eyebrow">Bắt đầu ôn tập</p>
-              <h2>Chọn môn hoặc bộ câu hỏi</h2>
+            <div class="subject-landing-header">
+              <div>
+                <p class="eyebrow">Bộ câu hỏi</p>
+                <h2 id="bank-chooser-title">Chọn môn hoặc bộ câu hỏi</h2>
+                <p id="bank-chooser-note">Chọn một bộ để bắt đầu hoặc tiếp tục tiến độ đã lưu.</p>
+              </div>
+              <button id="toggle-bank-chooser-btn" class="secondary-btn" type="button" aria-expanded="true" aria-controls="bank-cards">Thu gọn</button>
             </div>
             <div id="bank-cards" class="bank-cards"></div>
           </div>
@@ -167,13 +190,16 @@
           <div class="practice-workspace">
             <div class="practice-main">
               <div class="question-card">
+                <div class="question-progress" aria-hidden="true">
+                  <span id="question-progress-bar"></span>
+                </div>
                 <div class="question-meta">
                   <span id="question-chapter">Đang tải</span>
                   <span id="question-position">0 / 0</span>
                 </div>
 
                 <div class="question-heading">
-                  <h2 id="question-title">Đang tải bộ câu hỏi...</h2>
+                  <h2 id="question-title">Đang tải bộ câu hỏi…</h2>
                   <button id="bookmark-btn" class="icon-btn" type="button" aria-label="Đánh dấu câu này">☆</button>
                 </div>
 
@@ -205,12 +231,14 @@
                     <button id="save-question-btn" class="primary-btn" type="submit">Lưu câu hỏi</button>
                     <button id="cancel-question-edit-secondary-btn" class="secondary-btn" type="button">Hủy</button>
                   </div>
-                  <p id="question-editor-message" class="form-message"></p>
+                  <p id="question-editor-message" class="form-message" aria-live="polite"></p>
                 </form>
+
+                <div id="question-visuals" class="question-visuals" hidden></div>
 
                 <div id="options" class="options"></div>
 
-                <div id="answer-panel" class="answer-panel" hidden>
+                <div id="answer-panel" class="answer-panel" aria-live="polite" hidden>
                   <div class="answer-banner" id="answer-banner"></div>
                   <div class="answer-section">
                     <h3>Giải thích</h3>
@@ -239,7 +267,7 @@
                 <div class="quick-jump" aria-label="Điều hướng nhanh">
                   <label>
                     <span>Nhảy tới</span>
-                    <input id="question-jump" type="number" min="1" inputmode="numeric" placeholder="Số câu">
+                    <input id="question-jump" name="questionJump" type="number" min="1" inputmode="numeric" autocomplete="off" placeholder="Số câu…">
                   </label>
                   <button id="jump-btn" class="secondary-btn" type="button">Đi tới</button>
                   <button id="next-unanswered-btn" class="secondary-btn" type="button">Chưa làm</button>
@@ -258,19 +286,26 @@
               </div>
               <div class="side-actions">
                 <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
-                <button id="reset-progress-btn" class="ghost-btn" type="button">Xóa tiến độ</button>
+                  <button id="reset-progress-btn" class="ghost-btn danger-btn" type="button">Xóa tiến độ bộ này</button>
               </div>
               <div class="question-legend" aria-label="Chú thích trạng thái câu hỏi">
                 <span><i class="legend-dot current"></i>Hiện tại</span>
                 <span><i class="legend-dot correct"></i>Đúng</span>
                 <span><i class="legend-dot wrong"></i>Sai</span>
               </div>
+              <div class="question-page-control">
+                <label>
+                  <span>Phạm vi câu</span>
+                  <select id="question-page-select" name="questionPage" autocomplete="off" aria-label="Chọn phạm vi câu hỏi"></select>
+                </label>
+                <strong id="question-page-summary">0 câu</strong>
+              </div>
               <nav id="question-list" class="question-list" aria-label="Danh sách câu hỏi"></nav>
             </aside>
           </div>
         </section>
 
-        <section id="ranking-panel" class="panel">
+        <section id="ranking-panel" class="panel" role="tabpanel" aria-labelledby="tab-ranking">
           <div class="ranking-layout">
             <section class="home-section ranking-intro">
               <div>
@@ -285,7 +320,7 @@
           </div>
         </section>
 
-        <section id="ai-panel" class="panel">
+        <section id="ai-panel" class="panel" role="tabpanel" aria-labelledby="tab-ai">
           <div class="ai-layout">
             <form id="ai-form" class="upload-box">
               <div>
@@ -300,7 +335,7 @@
 
               <label class="user-api-key-field">
                 <span>API key cá nhân</span>
-                <input id="ai-api-key" name="apiKey" type="password" autocomplete="off" placeholder="Bắt buộc với user thường">
+                <input id="ai-api-key" name="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Nhập API key cá nhân…">
               </label>
 
               <label class="check-row admin-only" hidden>
@@ -331,11 +366,11 @@
               <div class="ai-controls">
                 <label>
                   <span>Chương</span>
-                  <input id="ai-chapter" name="chapter" type="text" placeholder="VD: Chương 2 - Tiến trình">
+                  <input id="ai-chapter" name="chapter" type="text" autocomplete="off" placeholder="Ví dụ: Chương 2 - Tiến trình…">
                 </label>
                 <label>
                   <span>Chủ đề</span>
-                  <input id="ai-topic" name="topic" type="text" placeholder="VD: Điều phối CPU">
+                  <input id="ai-topic" name="topic" type="text" autocomplete="off" placeholder="Ví dụ: Điều phối CPU…">
                 </label>
               </div>
 
@@ -353,6 +388,7 @@ Mỗi câu bắt buộc có:
 - questionType: single, multiple hoặc fill.
 - Câu single/multiple có 4-8 lựa chọn A-H.
 - Câu single có answer là một chữ cái; multiple có answer là mảng chữ cái; fill có answer là mảng text được chấp nhận.
+- Nếu câu hỏi cần bảng/đồ thị, thêm table, chart hoặc timeline theo schema; không nhét bảng vào prompt dạng text dài.
 - Câu fill vẫn bắt buộc có explanation, example và tips; giải thích vì sao đáp án text đúng và các cách viết tương đương.
 - Giải thích rõ ràng vì sao đúng và vì sao các lựa chọn còn lại sai hoặc dễ nhầm.
 - Ví dụ cụ thể trong môn.
@@ -361,7 +397,7 @@ Mỗi câu bắt buộc có:
               </label>
 
               <button id="generate-btn" class="primary-btn" type="submit">Tạo câu hỏi</button>
-              <p id="ai-message" class="form-message"></p>
+              <p id="ai-message" class="form-message" aria-live="polite"></p>
             </form>
 
             <div class="ai-result">
@@ -394,7 +430,7 @@ Mỗi câu bắt buộc có:
           </div>
         </section>
 
-        <section id="import-panel" class="panel">
+        <section id="import-panel" class="panel" role="tabpanel" aria-labelledby="tab-import">
           <div class="import-layout">
             <div class="upload-box">
               <div>
@@ -414,6 +450,23 @@ Schema bắt buộc:
       "difficulty": "Dễ | Trung bình | Khó",
       "questionType": "single | multiple | fill",
       "prompt": "Nội dung câu hỏi",
+      "table": {
+        "caption": "Tiêu đề bảng nếu câu hỏi cần bảng",
+        "columns": ["Cột 1", "Cột 2"],
+        "rows": [["Dòng 1 cột 1", "Dòng 1 cột 2"]]
+      },
+      "chart": {
+        "type": "bar | line",
+        "title": "Tiêu đề biểu đồ nếu cần",
+        "xLabel": "Trục X",
+        "yLabel": "Trục Y",
+        "data": [{"label": "A", "value": 10}]
+      },
+      "timeline": {
+        "caption": "Gantt chart nếu cần",
+        "unit": "ms",
+        "segments": [{"label": "P1", "start": 0, "end": 4}]
+      },
       "options": {
         "A": "Lựa chọn A",
         "B": "Lựa chọn B",
@@ -446,6 +499,7 @@ Yêu cầu nội dung:
 - Với single: answer là "A"; với multiple: answer là ["A","C"]; với fill: options là {} và answer là ["đáp án 1","đáp án tương đương"].
 - Câu fill vẫn phải có explanation/example/tips đầy đủ; explanation cần nêu vì sao đáp án ngắn đó đúng và các cách viết tương đương.
 - Câu trắc nghiệm có thể có 4-8 lựa chọn, dùng các khóa A-H.
+- Nếu cần bảng/đồ thị, dùng table/chart/timeline có cấu trúc; nếu không cần thì bỏ hẳn các field này.
 - Giải thích phải đủ rõ để người học hiểu ngay sau khi chọn đáp án.
 - Sắp xếp câu hỏi theo chapter rồi topic.</pre>
               <button id="copy-prompt-btn" class="secondary-btn" type="button">Copy prompt</button>
@@ -462,18 +516,18 @@ Yêu cầu nội dung:
               </label>
               <label>
                 <span>JSON câu hỏi</span>
-                <textarea id="import-json" rows="18" placeholder='{"subject":"...","title":"...","questions":[...]}'></textarea>
+                <textarea id="import-json" name="questionsJson" rows="18" autocomplete="off" spellcheck="false" placeholder='{"subject":"…","title":"…","questions":[…]}'></textarea>
               </label>
               <div class="side-actions">
                 <button id="import-questions-btn" class="primary-btn" type="submit">Nạp vào luyện tập</button>
                 <button id="sample-import-btn" class="secondary-btn" type="button">Chèn mẫu</button>
               </div>
-              <p id="import-message" class="form-message"></p>
+              <p id="import-message" class="form-message" aria-live="polite"></p>
             </form>
           </div>
         </section>
 
-        <section id="settings-panel" class="panel">
+        <section id="settings-panel" class="panel" role="region" aria-label="Cài đặt tài khoản">
           <div class="settings-layout">
             <section class="settings-card">
               <div>
@@ -514,12 +568,12 @@ Yêu cầu nội dung:
                 <input name="confirmPassword" type="password" autocomplete="new-password" required>
               </label>
               <button class="primary-btn" type="submit">Cập nhật mật khẩu</button>
-              <p id="password-message" class="form-message"></p>
+              <p id="password-message" class="form-message" aria-live="polite"></p>
             </form>
           </div>
         </section>
 
-        <section id="about-panel" class="panel">
+        <section id="about-panel" class="panel" role="tabpanel" aria-labelledby="tab-about">
           <div class="about-layout">
             <section class="home-section about-hero">
               <div>
@@ -546,7 +600,7 @@ Yêu cầu nội dung:
           </div>
         </section>
 
-        <section id="admin-panel" class="panel">
+        <section id="admin-panel" class="panel" role="tabpanel" aria-labelledby="tab-admin">
           <div class="admin-layout">
             <form id="create-user-form" class="upload-box">
               <div>
@@ -555,7 +609,7 @@ Yêu cầu nội dung:
               </div>
               <label>
                 <span>Username</span>
-                <input id="new-username" name="username" type="text" autocomplete="off" required>
+                <input id="new-username" name="username" type="text" autocomplete="off" spellcheck="false" required>
               </label>
               <label>
                 <span>Mật khẩu</span>
@@ -570,7 +624,7 @@ Yêu cầu nội dung:
                 </select>
               </label>
               <button class="primary-btn" type="submit">Tạo tài khoản</button>
-              <p id="admin-message" class="form-message"></p>
+              <p id="admin-message" class="form-message" aria-live="polite"></p>
             </form>
 
             <div class="ai-result">
@@ -588,7 +642,6 @@ Yêu cầu nội dung:
       </main>
     </div>
 
-    <script src="/react-ui.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
 </html>

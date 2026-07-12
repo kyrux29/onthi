@@ -16,15 +16,11 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY package*.json ./
 COPY server.js ./
 COPY src ./src
-COPY client ./client
 COPY public ./public
 COPY scripts ./scripts
 COPY subjects ./subjects
 COPY bo_400_cau_trac_nghiem_OS.md ./
 COPY README.md ./
-COPY vite.react-ui.config.mjs ./
-
-RUN npm run build:ui
 
 EXPOSE 3000
 

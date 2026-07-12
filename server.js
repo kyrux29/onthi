@@ -48,6 +48,7 @@ const upload = multer({
   }
 });
 
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '12mb' }));
 app.use(express.static(path.join(rootDir, 'public')));
 
@@ -65,7 +66,7 @@ app.post('/api/auth/login', async (req, res, next) => {
     }
 
     const publicUser = toPublicUser(user);
-    setSessionCookie(res, publicUser);
+    setSessionCookie(req, res, publicUser);
     res.json({ user: publicUser });
   } catch (error) {
     next(error);
@@ -73,7 +74,7 @@ app.post('/api/auth/login', async (req, res, next) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  clearSessionCookie(res);
+  clearSessionCookie(req, res);
   res.json({ ok: true });
 });
 
@@ -89,7 +90,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     aiConfigured: Boolean(process.env.OPENAI_API_KEY),
-    model: process.env.OPENAI_MODEL || 'gpt-5.5',
+    model: process.env.OPENAI_MODEL || 'gpt-5.4',
     databaseConfigured: isDatabaseConfigured(),
     databaseReady: isDatabaseReady(),
     databaseError: databaseError ? sanitizeErrorMessage(databaseError.message) : ''
@@ -465,7 +466,7 @@ async function attachUser(req, res, next) {
 
     const user = await findUserById(session.userId);
     req.user = user ? toPublicUser(user) : null;
-    if (!req.user) clearSessionCookie(res);
+    if (!req.user) clearSessionCookie(req, res);
     next();
   } catch (error) {
     next(error);
@@ -550,22 +551,28 @@ function parseBoolean(value, fallback = false) {
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 }
 
-function setSessionCookie(res, user) {
+function setSessionCookie(req, res, user) {
   const maxAge = 7 * 24 * 60 * 60 * 1000;
   res.cookie(authCookieName, createSessionToken(user), {
     httpOnly: true,
     sameSite: 'lax',
-    secure: false,
+    secure: isSecureRequest(req),
+    path: '/',
     maxAge
   });
 }
 
-function clearSessionCookie(res) {
+function clearSessionCookie(req, res) {
   res.clearCookie(authCookieName, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: false
+    secure: isSecureRequest(req),
+    path: '/'
   });
+}
+
+function isSecureRequest(req) {
+  return Boolean(req.secure || String(req.get('x-forwarded-proto') || '').split(',')[0].trim() === 'https');
 }
 
 function createSessionToken(user) {
