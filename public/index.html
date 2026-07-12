@@ -203,60 +203,60 @@
                   <button id="bookmark-btn" class="icon-btn" type="button" aria-label="Đánh dấu câu này">☆</button>
                 </div>
 
-                <div id="question-tools" class="question-tools" hidden>
-                  <div>
-                    <strong>Quản lý câu hỏi</strong>
-                    <span>Sửa nội dung, thêm câu mới hoặc xóa câu trong bộ đã lưu.</span>
-                  </div>
+                <details id="question-tools" class="question-tools" hidden>
+                  <summary>Quản lý câu hỏi</summary>
                   <div class="question-tool-actions">
                     <button id="edit-question-btn" class="secondary-btn" type="button">Sửa câu</button>
                     <button id="add-question-btn" class="secondary-btn" type="button">Thêm câu</button>
                     <button id="delete-question-btn" class="ghost-btn danger-btn" type="button">Xóa câu</button>
                   </div>
-                </div>
 
-                <form id="question-editor" class="question-editor" hidden>
-                  <div class="question-editor-header">
-                    <div>
-                      <p class="eyebrow">JSON câu hỏi</p>
-                      <h3 id="question-editor-title">Chỉnh sửa câu hỏi</h3>
+                  <form id="question-editor" class="question-editor" hidden>
+                    <div class="question-editor-header">
+                      <div>
+                        <p class="eyebrow">JSON câu hỏi</p>
+                        <h3 id="question-editor-title">Chỉnh sửa câu hỏi</h3>
+                      </div>
+                      <button id="cancel-question-edit-btn" class="ghost-btn" type="button">Đóng</button>
                     </div>
-                    <button id="cancel-question-edit-btn" class="ghost-btn" type="button">Đóng</button>
-                  </div>
-                  <label>
-                    <span>Nội dung JSON</span>
-                    <textarea id="question-editor-json" rows="14" spellcheck="false"></textarea>
-                  </label>
-                  <div class="side-actions">
-                    <button id="save-question-btn" class="primary-btn" type="submit">Lưu câu hỏi</button>
-                    <button id="cancel-question-edit-secondary-btn" class="secondary-btn" type="button">Hủy</button>
-                  </div>
-                  <p id="question-editor-message" class="form-message" aria-live="polite"></p>
-                </form>
+                    <label>
+                      <span>Nội dung JSON</span>
+                      <textarea id="question-editor-json" rows="14" spellcheck="false"></textarea>
+                    </label>
+                    <div class="side-actions">
+                      <button id="save-question-btn" class="primary-btn" type="submit">Lưu câu hỏi</button>
+                      <button id="cancel-question-edit-secondary-btn" class="secondary-btn" type="button">Hủy</button>
+                    </div>
+                    <p id="question-editor-message" class="form-message" aria-live="polite"></p>
+                  </form>
+                </details>
 
                 <div id="question-visuals" class="question-visuals" hidden></div>
 
                 <div id="options" class="options"></div>
 
-                <div id="answer-panel" class="answer-panel" aria-live="polite" hidden>
-                  <div class="answer-banner" id="answer-banner"></div>
-                  <div class="answer-section">
-                    <h3>Giải thích</h3>
-                    <p id="answer-explanation"></p>
+                <details id="answer-panel" class="answer-panel" aria-live="polite" hidden>
+                  <summary id="answer-summary">Xem giải thích đầy đủ</summary>
+                  <div class="answer-content">
+                    <div class="answer-banner" id="answer-banner"></div>
+                    <div class="answer-section">
+                      <h3>Giải thích</h3>
+                      <p id="answer-explanation"></p>
+                    </div>
+                    <div id="answer-example-section" class="answer-section" hidden>
+                      <h3>Ví dụ trong môn</h3>
+                      <p id="answer-example"></p>
+                    </div>
+                    <div class="answer-section">
+                      <h3>Mẹo làm nhanh</h3>
+                      <ul id="answer-tips"></ul>
+                    </div>
+                    <div id="option-analysis-section" class="answer-section">
+                      <h3 id="option-analysis-title">Phân tích lựa chọn</h3>
+                      <div id="option-analysis" class="analysis-grid"></div>
+                    </div>
                   </div>
-                  <div id="answer-example-section" class="answer-section" hidden>
-                    <h3>Ví dụ trong môn</h3>
-                    <p id="answer-example"></p>
-                  </div>
-                  <div class="answer-section">
-                    <h3>Mẹo làm nhanh</h3>
-                    <ul id="answer-tips"></ul>
-                  </div>
-                  <div id="option-analysis-section" class="answer-section">
-                    <h3 id="option-analysis-title">Phân tích lựa chọn</h3>
-                    <div id="option-analysis" class="analysis-grid"></div>
-                  </div>
-                </div>
+                </details>
               </div>
 
               <div class="control-bar">
@@ -264,29 +264,21 @@
                   <button id="prev-btn" class="secondary-btn" type="button">Câu trước</button>
                   <button id="next-btn" class="primary-btn" type="button">Câu tiếp</button>
                 </div>
-                <div class="quick-jump" aria-label="Điều hướng nhanh">
-                  <label>
-                    <span>Nhảy tới</span>
-                    <input id="question-jump" name="questionJump" type="number" min="1" inputmode="numeric" autocomplete="off" placeholder="Số câu…">
-                  </label>
-                  <button id="jump-btn" class="secondary-btn" type="button">Đi tới</button>
-                  <button id="next-unanswered-btn" class="secondary-btn" type="button">Chưa làm</button>
-                  <button id="next-wrong-btn" class="secondary-btn" type="button">Câu sai</button>
-                </div>
               </div>
             </div>
 
             <aside class="practice-tools" aria-label="Điều hướng câu hỏi">
               <div class="practice-tools-header">
-                <div>
-                  <p class="eyebrow">Điều hướng</p>
-                  <h2>Danh sách câu</h2>
-                </div>
-                <small id="question-nav-note">Click để nhảy nhanh</small>
+                <h2>Điều hướng</h2>
               </div>
-              <div class="side-actions">
-                <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
-                  <button id="reset-progress-btn" class="ghost-btn danger-btn" type="button">Xóa tiến độ bộ này</button>
+              <div class="quick-jump" aria-label="Điều hướng nhanh">
+                <label>
+                  <span>Nhảy tới câu</span>
+                  <input id="question-jump" name="questionJump" type="number" min="1" inputmode="numeric" autocomplete="off" placeholder="Số câu…">
+                </label>
+                <button id="jump-btn" class="secondary-btn" type="button">Đi tới</button>
+                <button id="next-unanswered-btn" class="secondary-btn" type="button">Chưa làm</button>
+                <button id="next-wrong-btn" class="secondary-btn" type="button">Câu sai</button>
               </div>
               <div class="question-legend" aria-label="Chú thích trạng thái câu hỏi">
                 <span><i class="legend-dot current"></i>Hiện tại</span>
@@ -301,6 +293,13 @@
                 <strong id="question-page-summary">0 câu</strong>
               </div>
               <nav id="question-list" class="question-list" aria-label="Danh sách câu hỏi"></nav>
+              <details class="navigator-options">
+                <summary>Tùy chọn bộ câu hỏi</summary>
+                <div class="side-actions">
+                  <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
+                  <button id="reset-progress-btn" class="ghost-btn danger-btn" type="button">Xóa tiến độ</button>
+                </div>
+              </details>
             </aside>
           </div>
         </section>

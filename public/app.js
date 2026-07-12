@@ -106,6 +106,7 @@ const els = {
   cancelQuestionEditSecondary: document.querySelector('#cancel-question-edit-secondary-btn'),
   options: document.querySelector('#options'),
   answerPanel: document.querySelector('#answer-panel'),
+  answerSummary: document.querySelector('#answer-summary'),
   answerBanner: document.querySelector('#answer-banner'),
   explanation: document.querySelector('#answer-explanation'),
   exampleSection: document.querySelector('#answer-example-section'),
@@ -216,6 +217,7 @@ function bindEvents() {
     state.questionNavPage = requestedPage;
     state.currentIndex = Math.min(requestedPage * QUESTION_NAV_PAGE_SIZE, Math.max(0, state.filtered.length - 1));
     renderQuestion();
+    scrollCurrentQuestionIntoView();
   });
   els.mode.addEventListener('change', () => {
     state.currentIndex = 0;
@@ -243,6 +245,11 @@ function bindEvents() {
   els.questionEditor.addEventListener('submit', saveQuestionEdit);
   els.cancelQuestionEdit.addEventListener('click', requestCloseQuestionEditor);
   els.cancelQuestionEditSecondary.addEventListener('click', requestCloseQuestionEditor);
+  els.questionTools.addEventListener('toggle', () => {
+    if (els.questionTools.open || !hasUnsavedQuestionEdit()) return;
+    if (window.confirm('Bỏ các thay đổi chưa lưu của câu hỏi này?')) closeQuestionEditor();
+    else els.questionTools.open = true;
+  });
   els.refreshRanking.addEventListener('click', loadRanking);
   els.homeBrand.addEventListener('click', () => activatePanel('home-panel'));
   els.userStatus.addEventListener('click', () => activatePanel('settings-panel'));
@@ -688,7 +695,7 @@ async function selectBank(bankId, options = {}) {
   }
   if (closeChooser) state.bankChooserOpen = false;
   renderBankChooser();
-  if (window.matchMedia('(max-width: 1180px)').matches) setFiltersOpen(false);
+  setFiltersOpen(false);
 }
 
 function renderBankChooser() {
@@ -776,7 +783,7 @@ function renderList() {
   const start = state.questionNavPage * QUESTION_NAV_PAGE_SIZE;
   const end = Math.min(start + QUESTION_NAV_PAGE_SIZE, state.filtered.length);
   els.questionPageSummary.textContent = state.filtered.length
-    ? `${start + 1}-${end} / ${state.filtered.length}`
+    ? `${end - start} / ${state.filtered.length} câu`
     : '0 câu';
 
   for (let index = start; index < end; index += 1) {
@@ -784,13 +791,15 @@ function renderList() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'question-chip';
-    button.textContent = question.generated ? `AI${question.number}` : String(question.number).padStart(3, '0');
-    button.setAttribute('aria-label', `Câu ${question.number}: ${question.prompt}`);
+    const displayNumber = getDisplayQuestionNumber(question);
+    button.textContent = String(displayNumber).padStart(3, '0');
+    button.setAttribute('aria-label', `Câu ${displayNumber}: ${getDisplayQuestionPrompt(question)}`);
     button.addEventListener('click', () => {
       if (!confirmDiscardQuestionEdit()) return;
       state.currentIndex = index;
       renderQuestion();
       renderList();
+      scrollCurrentQuestionIntoView();
     });
 
     const answer = getSavedAnswer(question);
@@ -817,9 +826,11 @@ function renderQuestionPageOptions(pageCount) {
     for (let page = 0; page < expectedCount; page += 1) {
       const start = page * QUESTION_NAV_PAGE_SIZE + 1;
       const end = Math.min((page + 1) * QUESTION_NAV_PAGE_SIZE, state.filtered.length);
+      const firstNumber = getDisplayQuestionNumber(state.filtered[start - 1]);
+      const lastNumber = getDisplayQuestionNumber(state.filtered[end - 1]);
       const option = document.createElement('option');
       option.value = String(page);
-      option.textContent = `${start}-${end}`;
+      option.textContent = `Câu ${firstNumber}-${lastNumber}`;
       els.questionPageSelect.appendChild(option);
     }
     els.questionPageSelect.dataset.total = String(state.filtered.length);
@@ -835,6 +846,7 @@ function renderQuestion() {
   els.tips.innerHTML = '';
   els.questionVisuals.innerHTML = '';
   els.questionVisuals.hidden = true;
+  els.answerPanel.open = false;
 
   if (!question) {
     els.questionChapter.textContent = 'Không có câu phù hợp';
@@ -850,11 +862,11 @@ function renderQuestion() {
   }
 
   const saved = getSavedAnswer(question);
-  els.questionChapter.textContent = [question.subject, question.chapter, question.topic].filter(Boolean).join(' · ');
+  els.questionChapter.textContent = [question.chapter, question.topic].filter(Boolean).join(' · ');
   els.questionPosition.textContent = `${state.currentIndex + 1} / ${state.filtered.length}`;
   els.questionJump.max = String(state.filtered.length);
   els.questionJump.value = String(state.currentIndex + 1);
-  els.questionTitle.textContent = `${question.generated ? 'AI' : `Câu ${String(question.number).padStart(3, '0')}`}. ${question.prompt}`;
+  els.questionTitle.textContent = getDisplayQuestionPrompt(question);
   els.questionProgressBar.style.width = `${((state.currentIndex + 1) / state.filtered.length) * 100}%`;
   els.bookmark.classList.toggle('active', isQuestionBookmarked(question));
   els.bookmark.textContent = isQuestionBookmarked(question) ? '★' : '☆';
@@ -873,6 +885,7 @@ function renderQuestion() {
     showAnswer(question, saved.selected);
   } else {
     els.answerPanel.hidden = true;
+    els.answerPanel.open = false;
   }
 
   renderList();
@@ -884,6 +897,7 @@ function renderQuestionTools(question) {
   els.questionTools.hidden = !canManage;
 
   if (!canManage) {
+    els.questionTools.open = false;
     closeQuestionEditor();
     return;
   }
@@ -1154,6 +1168,7 @@ function openQuestionEditor(mode) {
 
   state.questionEditMode = mode;
   state.questionEditTargetId = mode === 'edit' ? question.id : null;
+  els.questionTools.open = true;
   els.questionEditor.hidden = false;
   els.questionEditorTitle.textContent = mode === 'add' ? 'Thêm câu hỏi mới' : `Chỉnh sửa câu ${question.number}`;
   els.questionEditorJson.value = JSON.stringify(
@@ -1177,6 +1192,7 @@ function closeQuestionEditor() {
   els.questionEditor.hidden = true;
   els.questionEditorMessage.textContent = '';
   els.questionEditorMessage.classList.remove('error');
+  if (els.questionTools) els.questionTools.open = false;
 }
 
 function hasUnsavedQuestionEdit() {
@@ -1451,16 +1467,21 @@ function decorateOption(element, question, letter, selected) {
   element.classList.toggle('wrong', isSelectedLetter && !isCorrectLetter);
   element.classList.toggle('dimmed', !isCorrectLetter && !isSelectedLetter);
 
-  if (isSelectedLetter || isCorrectLetter) {
+  const questionType = getQuestionType(question);
+  const shouldShowFeedback = questionType === 'single'
+    ? isSelectedLetter || isCorrectLetter
+    : isSelectedLetter;
+
+  if (shouldShowFeedback) {
     const feedback = document.createElement('div');
     feedback.className = 'option-feedback';
     const isCorrect = isCorrectLetter;
-    const showLearningDetail = isCorrect && getQuestionType(question) === 'single';
+    const showLearningDetail = isCorrect && questionType === 'single';
     const status = isCorrect ? '✓ Chính xác!' : '✕ Chưa đúng';
     const explanation = showLearningDetail
       ? question.explanation || buildOptionAnalysis(question, letter)
       : buildOptionAnalysis(question, letter);
-    const tips = showLearningDetail ? question.tips || [] : [];
+    const tips = showLearningDetail ? (question.tips || []).slice(0, 1) : [];
 
     feedback.innerHTML = `
       <strong class="feedback-status">${status}</strong>
@@ -1477,6 +1498,11 @@ function showAnswer(question, selected) {
   const correct = isCorrectAnswer(question, selected);
   const questionType = getQuestionType(question);
   els.answerPanel.hidden = false;
+  els.answerPanel.open = questionType !== 'single';
+  els.answerSummary.textContent = correct
+    ? 'Đúng · Xem giải thích đầy đủ'
+    : 'Chưa đúng · Xem giải thích đầy đủ';
+  els.answerPanel.classList.toggle('wrong', !correct);
   els.answerBanner.classList.toggle('wrong', !correct);
   els.answerBanner.textContent = correct
     ? `Đúng. Đáp án: ${formatAnswer(question)}`
@@ -1548,6 +1574,15 @@ function buildOptionAnalysis(question, letter) {
 
 function getQuestionType(question) {
   return question.questionType || (Object.keys(question.options || {}).length ? 'single' : 'fill');
+}
+
+function getDisplayQuestionNumber(question) {
+  const match = String(question?.prompt || '').match(/^Câu\s+(?:hỏi\s+)?(\d+)/i);
+  return match ? Number(match[1]) : question?.number || 1;
+}
+
+function getDisplayQuestionPrompt(question) {
+  return String(question?.prompt || '').replace(/^Câu\s+(?:hỏi\s+)?\d+\s*[:.)-]\s*/i, '').trim();
 }
 
 function getOptionLetters(question) {
@@ -1633,6 +1668,7 @@ function moveQuestion(delta) {
   if (!confirmDiscardQuestionEdit()) return;
   state.currentIndex = (state.currentIndex + delta + state.filtered.length) % state.filtered.length;
   renderQuestion();
+  scrollCurrentQuestionIntoView();
 }
 
 function jumpToQuestion() {
@@ -1643,6 +1679,7 @@ function jumpToQuestion() {
   const nextIndex = Math.min(Math.max(requested, 1), state.filtered.length) - 1;
   state.currentIndex = nextIndex;
   renderQuestion();
+  scrollCurrentQuestionIntoView();
 }
 
 function moveToNextMatch(predicate) {
@@ -1654,6 +1691,7 @@ function moveToNextMatch(predicate) {
     if (predicate(state.filtered[nextIndex])) {
       state.currentIndex = nextIndex;
       renderQuestion();
+      scrollCurrentQuestionIntoView();
       return;
     }
   }
@@ -1668,6 +1706,12 @@ function shuffleCurrentSet() {
   state.currentIndex = 0;
   renderList();
   renderQuestion();
+}
+
+function scrollCurrentQuestionIntoView() {
+  requestAnimationFrame(() => {
+    document.querySelector('.question-card')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
 }
 
 function toggleBookmark() {
