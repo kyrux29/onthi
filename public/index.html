@@ -267,9 +267,41 @@
                   <button id="next-btn" class="primary-btn" type="button">Câu tiếp</button>
                 </div>
               </div>
+
+              <section class="question-navigation" aria-label="Điều hướng câu hỏi">
+                <div class="practice-tools-header">
+                  <h2>Điều hướng</h2>
+                  <div class="bank-score" aria-label="Điểm của bộ câu hỏi" aria-live="polite">
+                    <span>Điểm</span>
+                    <strong id="bank-score">0 / 0</strong>
+                  </div>
+                </div>
+                <div class="quick-jump" aria-label="Điều hướng nhanh">
+                  <label>
+                    <span>Nhảy tới câu</span>
+                    <input id="question-jump" name="questionJump" type="number" min="1" inputmode="numeric" autocomplete="off" placeholder="Số câu…">
+                  </label>
+                  <button id="jump-btn" class="secondary-btn" type="button">Đi tới</button>
+                  <button id="next-unanswered-btn" class="secondary-btn" type="button">Chưa làm</button>
+                  <button id="next-wrong-btn" class="secondary-btn" type="button">Câu sai</button>
+                </div>
+                <div class="question-legend" aria-label="Chú thích trạng thái câu hỏi">
+                  <span><i class="legend-dot current"></i>Hiện tại</span>
+                  <span><i class="legend-dot correct"></i>Đúng</span>
+                  <span><i class="legend-dot wrong"></i>Sai</span>
+                </div>
+                <div class="question-page-control">
+                  <label>
+                    <span>Phạm vi câu</span>
+                    <select id="question-page-select" name="questionPage" autocomplete="off" aria-label="Chọn phạm vi câu hỏi"></select>
+                  </label>
+                  <strong id="question-page-summary">0 câu</strong>
+                </div>
+                <nav id="question-list" class="question-list" aria-label="Danh sách câu hỏi"></nav>
+              </section>
             </div>
 
-            <aside class="practice-tools" aria-label="Tùy chọn và điều hướng câu hỏi">
+            <aside class="practice-tools" aria-label="Tùy chọn bộ câu hỏi">
               <section class="practice-context" aria-label="Bộ câu hỏi và bộ lọc">
                 <div>
                   <span id="practice-bank-subject">Bộ câu hỏi</span>
@@ -280,43 +312,14 @@
                   <button id="side-filter-toggle-btn" class="secondary-btn" type="button" aria-expanded="false" aria-controls="practice-filters">Bộ lọc</button>
                 </div>
               </section>
-              <div class="practice-tools-header">
-                <h2>Điều hướng</h2>
-                <div class="bank-score" aria-label="Điểm của bộ câu hỏi" aria-live="polite">
-                  <span>Điểm</span>
-                  <strong id="bank-score">0 / 0</strong>
-                </div>
-              </div>
-              <div class="quick-jump" aria-label="Điều hướng nhanh">
-                <label>
-                  <span>Nhảy tới câu</span>
-                  <input id="question-jump" name="questionJump" type="number" min="1" inputmode="numeric" autocomplete="off" placeholder="Số câu…">
-                </label>
-                <button id="jump-btn" class="secondary-btn" type="button">Đi tới</button>
-                <button id="next-unanswered-btn" class="secondary-btn" type="button">Chưa làm</button>
-                <button id="next-wrong-btn" class="secondary-btn" type="button">Câu sai</button>
-              </div>
-              <div class="question-legend" aria-label="Chú thích trạng thái câu hỏi">
-                <span><i class="legend-dot current"></i>Hiện tại</span>
-                <span><i class="legend-dot correct"></i>Đúng</span>
-                <span><i class="legend-dot wrong"></i>Sai</span>
-              </div>
-              <div class="question-page-control">
-                <label>
-                  <span>Phạm vi câu</span>
-                  <select id="question-page-select" name="questionPage" autocomplete="off" aria-label="Chọn phạm vi câu hỏi"></select>
-                </label>
-                <strong id="question-page-summary">0 câu</strong>
-              </div>
-              <nav id="question-list" class="question-list" aria-label="Danh sách câu hỏi"></nav>
-              <details class="navigator-options">
-                <summary>Tùy chọn bộ câu hỏi</summary>
+              <section class="practice-option-actions">
+                <h2>Tùy chọn bộ câu hỏi</h2>
                 <div class="side-actions">
                   <button id="shuffle-btn" class="secondary-btn" type="button">Trộn câu</button>
                   <button id="attempt-history-btn" class="secondary-btn" type="button">Lịch sử làm bài</button>
                   <button id="restart-progress-btn" class="secondary-btn" type="button">Làm lại bộ này</button>
                 </div>
-              </details>
+              </section>
             </aside>
           </div>
 
